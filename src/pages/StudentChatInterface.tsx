@@ -332,7 +332,20 @@ export default function StudentChatInterface() {
     // --- Render ---
     if (step === 'room') {
         return (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                <button
+                    onClick={() => window.location.href = '/'}
+                    style={{
+                        position: 'absolute', top: '20px', left: '20px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        background: 'rgba(255,255,255,0.2)', color: 'white',
+                        border: 'none', padding: '8px 16px', borderRadius: '12px',
+                        cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
+                        backdropFilter: 'blur(5px)'
+                    }}
+                >
+                    <ArrowLeft size={18} /> 뒤로가기
+                </button>
                 <div style={{ background: 'white', padding: '40px', borderRadius: '24px', textAlign: 'center', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏫</div>
                     <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>AI 챗봇 교실</h1>
