@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard, Users, BookOpen, Settings, Plus, Save,
-    Trash2, Upload, FileText, CheckCircle, Play
+    Trash2, Upload, FileText, CheckCircle, Play, LogOut
 } from 'lucide-react';
 import type { Question, Room } from '../types';
+import { signIn, signUp, signOut, getCurrentUser } from '../lib/auth';
 
 /**
  * [Mock Data]
@@ -26,6 +27,7 @@ export default function TeacherAdminPage() {
     // --- State ---
     const [activeTab, setActiveTab] = useState<'dashboard' | 'materials' | 'students' | 'settings'>('dashboard');
     const [isLogin, setIsLogin] = useState(false);
+    const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
 
@@ -69,19 +71,54 @@ export default function TeacherAdminPage() {
 
     // --- Handlers ---
 
-    const handleLogin = (e: React.FormEvent) => {
+    // 세션 복원 (자동 로그인)
+    useEffect(() => {
+        getCurrentUser().then(user => {
+            if (user) {
+                setTeacherEmail(user.email);
+                setTeacherRole(user.role);
+                setIsLogin(true);
+            }
+        }).catch(err => {
+            console.error('세션 복원 실패:', err);
+        });
+    }, []);
+
+    const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Admin credentials check
-        if (loginEmail === 'ghinokr@hongik68.sen.hs.kr' && loginPassword === '111111') {
-            setTeacherEmail(loginEmail);
-            setTeacherRole('master');
+        try {
+            const user = await signIn(loginEmail, loginPassword);
+            setTeacherEmail(user.email);
+            setTeacherRole(user.role);
             setIsLogin(true);
-        } else {
-            // For other teachers, just log them in as regular
-            setTeacherEmail(loginEmail);
+        } catch (error: any) {
+            alert('로그인 실패: ' + (error.message || '이메일 또는 비밀번호를 확인하세요'));
+        }
+    };
+
+    const handleSignup = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        try {
+            const user = await signUp(loginEmail, loginPassword);
+            setTeacherEmail(user.email);
+            setTeacherRole(user.role);
+            setIsLogin(true);
+            alert('회원가입 성공! 일반 교사로 등록되었습니다.');
+        } catch (error: any) {
+            alert('회원가입 실패: ' + (error.message || '이메일 또는 비밀번호를 확인하세요'));
+        }
+    };
+
+    const handleLogout = async () => {
+        try {
+            await signOut();
+            setIsLogin(false);
+            setTeacherEmail('');
             setTeacherRole('regular');
-            setIsLogin(true);
+        } catch (error: any) {
+            alert('로그아웃 실패: ' + error.message);
         }
     };
 
@@ -265,7 +302,46 @@ export default function TeacherAdminPage() {
                         <h1>AI 챗봇 관리자</h1>
                         <p>선생님 계정으로 로그인하세요</p>
                     </div>
-                    <form onSubmit={handleLogin} className="teacher-login-form">
+
+                    {/* 로그인/회원가입 탭 */}
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                        <button
+                            type="button"
+                            onClick={() => setAuthMode('login')}
+                            style={{
+                                flex: 1,
+                                padding: '12px',
+                                border: 'none',
+                                borderRadius: '8px',
+                                background: authMode === 'login' ? '#3b82f6' : '#e5e7eb',
+                                color: authMode === 'login' ? 'white' : '#6b7280',
+                                fontWeight: authMode === 'login' ? '600' : '400',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            로그인
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setAuthMode('signup')}
+                            style={{
+                                flex: 1,
+                                padding: '12px',
+                                border: 'none',
+                                borderRadius: '8px',
+                                background: authMode === 'signup' ? '#3b82f6' : '#e5e7eb',
+                                color: authMode === 'signup' ? 'white' : '#6b7280',
+                                fontWeight: authMode === 'signup' ? '600' : '400',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            회원가입
+                        </button>
+                    </div>
+
+                    <form onSubmit={authMode === 'login' ? handleLogin : handleSignup} className="teacher-login-form">
                         <div className="teacher-login-input-group">
                             <label>이메일</label>
                             <input
@@ -286,8 +362,17 @@ export default function TeacherAdminPage() {
                                 required
                             />
                         </div>
-                        <button type="submit" className="teacher-login-button">
-                            로그인
+                        <button
+                            type="submit"
+                            className="teacher-login-button"
+                            disabled={!loginEmail.trim() || !loginPassword.trim()}
+                            style={{
+                                opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.5,
+                                cursor: (loginEmail.trim() && loginPassword.trim()) ? 'pointer' : 'not-allowed',
+                                transition: 'all 0.2s'
+                            }}
+                        >
+                            {authMode === 'login' ? '로그인' : '회원가입'}
                         </button>
                     </form>
                 </div>
@@ -342,8 +427,28 @@ export default function TeacherAdminPage() {
                         </div>
                         <div className="teacher-profile-info">
                             <div className="teacher-profile-email">{teacherEmail}</div>
+                            <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>
+                                {teacherRole === 'master' ? '관리자' : '일반 교사'}
+                            </div>
                         </div>
                     </div>
+                    <button
+                        onClick={handleLogout}
+                        className="teacher-button-secondary"
+                        style={{
+                            width: '100%',
+                            marginTop: '12px',
+                            padding: '8px',
+                            fontSize: '13px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                        }}
+                    >
+                        <LogOut size={16} />
+                        로그아웃
+                    </button>
                 </div>
             </aside>
 
