@@ -6,7 +6,7 @@ import {
 import type { Question, Room } from '../types';
 import { signIn, signUp, signOut, getCurrentUser } from '../lib/auth';
 import { getQuestions, createQuestion, updateQuestion, deleteQuestion } from '../lib/questions';
-import { getStudents, createStudents, deleteStudent, type Student } from '../lib/students';
+import { getStudents, createStudents, type Student } from '../lib/students';
 import { getRooms, deleteRoom } from '../lib/rooms';
 
 

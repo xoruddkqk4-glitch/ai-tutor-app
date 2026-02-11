@@ -105,7 +105,7 @@ export default function StudentChatInterface() {
         });
     };
 
-    const toggleClassGroup = (className: string, studentsInClass: Student[]) => {
+    const toggleClassGroup = (_className: string, studentsInClass: Student[]) => {
         const allSelected = studentsInClass.every(s => selectedStudents.some(sel => sel.id === s.id));
         if (allSelected) {
             setSelectedStudents(prev => prev.filter(s => !studentsInClass.some(sic => sic.id === s.id)));

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { getQuestions } from '../lib/questions';
 import { getStudents } from '../lib/students';
 import { getRoomById, updateRoom, getRoomQuestionIds, createRoom } from '../lib/rooms';
