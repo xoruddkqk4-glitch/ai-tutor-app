@@ -1416,3 +1416,627 @@ body {
     justify-content: flex-end;
     gap: 12px;
 }
+/* Student Chat Interface - Consolidated UI (Vanilla CSS) */
+.sc-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #f8fafc;
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+.sc-header {
+    background: white;
+    padding: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.sc-header-row {
+     display: flex;
+     justify-content: space-between;
+     align-items: center;
+     margin-bottom: 16px;
+}
+
+.sc-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #1f2937;
+}
+
+.sc-subtitle {
+     font-size: 12px;
+     color: #6b7280;
+}
+
+.sc-student-selector {
+    background-color: #eff6ff;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #dbeafe;
+    margin-bottom: 16px;
+}
+
+.sc-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #1e40af;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.sc-checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.sc-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid #e5e7eb;
+    font-size: 13px;
+    color: #374151;
+    cursor: pointer;
+    user-select: none;
+}
+
+.sc-checkbox-item:hover {
+    background: #f9fafb;
+}
+
+.sc-checkbox-item.checked {
+    background: #dbeafe;
+    border-color: #3b82f6;
+    color: #1e40af;
+    font-weight: bold;
+}
+
+.sc-checkbox-item input {
+    margin: 0;
+}
+
+.sc-question-area {
+    background-color: #fef2f2;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #fee2e2;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sc-question-label {
+    font-size: 14px;
+    font-weight: bold;
+    color: #991b1b;
+    margin-bottom: 4px;
+}
+
+.sc-question-text {
+    font-size: 12px;
+    color: #dc2626;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+.sc-btn-outline-red {
+    background: white;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.sc-btn-outline-red:hover {
+    background: #fef2f2;
+}
+
+.sc-chat-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    padding-bottom: 180px;
+}
+
+.sc-message-row {
+    display: flex;
+    margin-bottom: 12px;
+}
+
+.sc-message-row.user {
+    justify-content: flex-end;
+}
+
+.sc-message-row.assistant {
+    justify-content: flex-start;
+}
+
+.sc-message-bubble {
+    max-width: 80%;
+    padding: 12px;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    border: 1px solid;
+    line-height: 1.6;
+    word-break: break-word;
+}
+
+.sc-bubble-user {
+    background-color: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+.sc-bubble-group {
+    background-color: #dbeafe;
+    color: #1e40af;
+    border-color: #bfdbfe;
+}
+
+.sc-bubble-assistant {
+    background-color: white;
+    color: #1f2937;
+    border-color: #f3f4f6;
+}
+
+.sc-footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.1);
+    z-index: 20;
+}
+
+.sc-footer-inner {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.sc-faq-scroll {
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding: 8px;
+    scrollbar-width: none;
+}
+
+.sc-faq-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.sc-faq-btn {
+    flex-shrink: 0;
+    background-color: #fef3c7;
+    color: #78350f;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid #fde68a;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.sc-faq-btn:hover {
+    background-color: #fde68a;
+}
+
+.sc-input-form {
+    padding: 12px;
+    background: white;
+    display: flex;
+    gap: 8px;
+}
+
+.sc-input {
+    flex: 1;
+    padding: 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.sc-input:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+}
+
+.sc-send-btn {
+    padding: 0 16px;
+    border-radius: 12px;
+    background-color: #2563eb;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sc-send-btn:hover:not(:disabled) {
+    background-color: #1d4ed8;
+}
+
+.sc-send-btn:disabled {
+    background-color: #d1d5db;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+.sc-save-row {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 8px;
+}
+
+.sc-save-btn {
+    font-size: 12px;
+    color: #6b7280;
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.sc-save-btn:hover {
+    color: #16a34a;
+}
+
+.sc-modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+}
+
+.sc-modal-box {
+    background: white;
+    width: 100%;
+    max-width: 500px;
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    overflow: hidden;
+    margin: 16px;
+    display: flex;
+    flex-direction: column;
+    max-height: 80vh;
+}
+
+.sc-modal-header {
+    padding: 16px;
+    border-bottom: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #f9fafb;
+}
+
+.sc-modal-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: bold;
+    color: #111;
+}
+
+.sc-modal-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #666;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+}
+
+.sc-modal-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.sc-modal-footer {
+     padding: 16px;
+     border-top: 1px solid #e5e7eb;
+     background-color: #f9fafb;
+     display: flex;
+     justify-content: flex-end;
+     gap: 8px;
+}
+
+.sc-modal-cancel-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #e5e7eb;
+    color: #374151;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.sc-modal-confirm-btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    border: none;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.sc-modal-confirm-btn:disabled {
+    background: #d1d5db;
+    cursor: not-allowed;
+}
+
+.sc-modal-item {
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    background: white;
+}
+
+.sc-modal-item:hover {
+    background: #f9fafb;
+}
+
+.sc-modal-item.selected {
+    border-color: #2563eb;
+    background: #eff6ff;
+}
+
+
+/* Student Interface - 2 Column Design Restoration */
+.sc-desktop-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    height: 100vh;
+    background: #e5e5e5;
+    overflow: hidden;
+}
+
+.sc-main-panel {
+    background: white;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    border-right: 1px solid #ddd;
+}
+
+.sc-sidebar-panel {
+    padding: 20px;
+    overflow-y: auto;
+    background: #fdfdfd;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Card Styles */
+.sc-card {
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    text-align: center;
+}
+
+.sc-card-blue {
+    background: #eff6ff;
+    border: 2px solid #bfdbfe;
+}
+
+.sc-card-pink {
+    background: #fff1f2;
+    border: 2px solid #fecdd3;
+}
+
+.sc-card-yellow {
+    background: #fffbeb;
+    border: 2px solid #fde68a;
+}
+
+.sc-card-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #444;
+    margin-bottom: 12px;
+}
+
+/* Specific Component Styles */
+.sc-student-list-box {
+    background: white;
+    border-radius: 12px;
+    padding: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dbeafe;
+}
+
+.sc-question-btn {
+    background: white;
+    border: 2px solid #fda4af;
+    color: #be123c;
+    font-weight: bold;
+    padding: 12px;
+    border-radius: 12px;
+    width: 100%;
+    cursor: pointer;
+    font-size: 16px;
+    margin-bottom: 8px;
+}
+
+.sc-question-display {
+    background: white;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #881337;
+}
+
+.sc-faq-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.sc-faq-item {
+    background: white;
+    border: 1px solid #fbbf24;
+    padding: 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    color: #92400e;
+    cursor: pointer;
+    text-align: left;
+    transition: transform 0.1s;
+}
+
+.sc-faq-item:hover {
+    background: #fff7ed;
+    transform: scale(1.02);
+}
+
+.sc-save-exit-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 50;
+    background: #4b5563;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 30px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.sc-save-exit-btn:hover {
+    background: #374151;
+}
+
+/* Chat Overrides for Desktop */
+.sc-chat-desktop-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 80px 40px 40px 40px; /* Top padding for Save btn */
+}
+
+.sc-input-desktop-area {
+    padding: 24px;
+    background: white;
+    border-top: 1px solid #eee;
+}
+
+.sc-chat-title-header {
+    text-align: center;
+    padding: 20px;
+    background: #f9fafb;
+    border-bottom: 1px solid #eee;
+    font-size: 18px;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+}
+
+
+/* Student Interface - Final Scroll Adjustments */
+.sc-desktop-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px; /* Compact right panel */
+    height: 100vh;
+    width: 100vw;
+    background: #f8fafc;
+    overflow: hidden; /* Global scroll lock */
+}
+
+.sc-main-panel {
+    background: white;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: relative;
+    border-right: 1px solid #e5e7eb;
+    overflow: hidden;
+}
+
+.sc-sidebar-panel {
+    padding: 20px;
+    background: #fff;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    height: 100%;
+    overflow: hidden; /* Force fixed right panel */
+}
+
+.sc-chat-title-header {
+    flex-shrink: 0;
+    text-align: center;
+    padding: 16px;
+    background: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 16px;
+    font-weight: bold;
+    color: #374151;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 60px;
+}
+
+.sc-chat-desktop-area {
+    flex: 1; /* Takes remaining height */
+    overflow-y: auto; /* Independent scroll */
+    padding: 20px 40px;
+    padding-top: 70px; /* Space for absolute Save button */
+    display: flex;
+    flex-direction: column;
+}
+
+.sc-input-desktop-area {
+    flex-shrink: 0;
+    padding: 20px;
+    background: white;
+    border-top: 1px solid #e5e7eb;
+}
+
+.sc-save-exit-btn {
+    position: absolute;
+    top: 12px;
+    left: 20px;
+    z-index: 50;
+    /* ... existing styles ... */
+}
+

@@ -1,46 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Student, Question } from '../types';
 
-/**
- * [목 데이터]
- * 백엔드(Supabase) 연동 전 UI 테스트를 위한 더미 데이터입니다.
- */
-const MOCK_STUDENTS: Student[] = [
-    { id: 1, number: 1, name: '강민지', competency: '상', className: '1반' },
-    { id: 2, number: 2, name: '김철수', competency: '중', className: '1반' },
-    { id: 3, number: 3, name: '이영희', competency: '하', className: '2반' },
-    { id: 4, number: 4, name: '박지성', competency: '상', className: '2반' },
-    { id: 5, number: 5, name: '손흥민', competency: '최상', className: '1반' },
-];
-
-const MOCK_QUESTIONS: Question[] = [
-    {
-        id: 1,
-        examCode: '2024-1학기-64번',
-        topic: '문화적 혁신',
-        passage: `이전 아이디어를 기반으로 아웃워치되는 근거는 다른 부분에서 확인할 수 있습니다. "Ideas are worked out as logical implications or consequences of other accepted ideas, and it is in this way that cultural innovations and discoveries are possible.
-
-를 우리말로 해석하면: "아이디어는 다른 받아들여진 아이디어의 논리적 함의나 결과로 발전되며, 이러한 방식으로 문화적 혁신이나 발견이 가능하다는 것입니다. 이해가 어렵다면, 어떤 부분이 더 궁금한지 추가로 알려주세요!`
-    },
-    {
-        id: 2,
-        examCode: '2024-1학기-65번',
-        topic: 'AI 윤리',
-        passage: 'Artificial Intelligence ethics are becoming increasingly important in modern society.'
-    },
-    {
-        id: 3,
-        examCode: '2024-1학기-66번',
-        topic: '고대 문명',
-        passage: 'Ancient civilizations developed complex systems of governance.'
-    },
-    {
-        id: 4,
-        examCode: '2024-1학기-67번',
-        topic: '환경 보호',
-        passage: 'Environmental protection requires collective action from all nations.'
-    },
-];
+import { fetchRoomData } from '../lib/public-api';
+import { Send, User, Bot, Users, ArrowLeft, CheckSquare, Square } from 'lucide-react';
 
 const FAQ_QUESTIONS = [
     "이 글의 우리말 주제는 뭘까?",
@@ -54,12 +16,25 @@ export default function StudentChatInterface() {
     const [step, setStep] = useState<'room' | 'chat'>('room');
     const [roomNumber, setRoomNumber] = useState('');
 
-    const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
-    const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
-    const [selectedClass, setSelectedClass] = useState<string | null>(null);
+    // Data from API
+    type RoomInfo = {
+        id: number;
+        class_name: string;
+        drive_folder_id?: string;
+        google_script_url?: string;
+        api_key?: string;
+        system_prompt?: string;
+    };
+    const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+    const [allStudents, setAllStudents] = useState<Student[]>([]);
+    const [roomQuestions, setRoomQuestions] = useState<Question[]>([]);
 
-    // Chat
-    const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string }[]>([]);
+    // Selected User Info (Multi-Select)
+    const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
+
+    // Chat State
+    const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
+    const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string; isGroup?: boolean }[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -69,28 +44,19 @@ export default function StudentChatInterface() {
     const [showQuestionModal, setShowQuestionModal] = useState(false);
     const [showSentenceModal, setShowSentenceModal] = useState(false);
 
-    // Sentence Modal
+    // Sentence Modal (FAQ 4)
     const [sentences, setSentences] = useState<string[]>([]);
     const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
 
-    // Temporary selections for modals
-    const [tempStudents, setTempStudents] = useState<Student[]>([]);
+    // Temporary selections
     const [tempQuestion, setTempQuestion] = useState<Question | null>(null);
 
-    // Get unique classes from students
-    const uniqueClasses = Array.from(new Set(MOCK_STUDENTS.map(s => s.className || '기타'))).sort();
-
-    // Get students for selected class
-    const classStudents = selectedClass
-        ? MOCK_STUDENTS.filter(s => (s.className || '기타') === selectedClass)
-        : [];
-
-    // Auto-scroll to bottom of chat
+    // Auto-scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // Split passage into sentences when question is selected
+    // Split passage
     useEffect(() => {
         if (selectedQuestion) {
             const sentenceArray = selectedQuestion.passage
@@ -101,80 +67,35 @@ export default function StudentChatInterface() {
     }, [selectedQuestion]);
 
     // --- Handlers ---
-    const handleRoomSubmit = (e: React.FormEvent) => {
+
+    // 1. Room Code Submit
+    const handleRoomSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (roomNumber.trim()) {
+        if (!roomNumber.trim()) return;
+
+        setIsLoading(true);
+        try {
+            const data = await fetchRoomData(roomNumber.trim());
+            console.log('Room Data:', data);
+
+            if (!data.room) throw new Error('방 정보를 찾을 수 없습니다.');
+
+            setRoomInfo(data.room);
+            setAllStudents(data.students || []);
+            setRoomQuestions(data.questions || []);
+
             setStep('chat');
+        } catch (error: any) {
+            console.error(error);
+            alert('입장 중 오류가 발생했습니다: ' + error.message);
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!input.trim() || isLoading) return;
-
-        const userMessage = input.trim();
-        setInput('');
-        setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-        setIsLoading(true);
-
-        // Simulate AI response
-        setTimeout(() => {
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: '이 부분에 대해 더 자세히 설명해드리겠습니다. 어떤 부분이 궁금하신가요?'
-            }]);
-            setIsLoading(false);
-        }, 1000);
-    };
-
-    const handleFAQClick = (index: number) => {
-        if (index === 3) {
-            // FAQ 4: Open sentence modal
-            setShowSentenceModal(true);
-        } else {
-            // FAQ 1-3: Send question directly
-            const question = FAQ_QUESTIONS[index];
-            setMessages(prev => [...prev, { role: 'user', content: question }]);
-            setIsLoading(true);
-
-            setTimeout(() => {
-                setMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: `"${question}"에 대한 답변입니다...`
-                }]);
-                setIsLoading(false);
-            }, 1000);
-        }
-    };
-
-    const handleSentenceSelect = () => {
-        if (selectedSentenceIndex === null) return;
-
-        const sentence = sentences[selectedSentenceIndex];
-        const question = `구두점 기준으로 ${selectedSentenceIndex + 1}번째 영어 문장을 문법적으로 분석하고 문맥에 맞게 해석해줘: "${sentence}"`;
-
-        setMessages(prev => [...prev, { role: 'user', content: question }]);
-        setShowSentenceModal(false);
-        setSelectedSentenceIndex(null);
-        setIsLoading(true);
-
-        setTimeout(() => {
-            setMessages(prev => [...prev, {
-                role: 'assistant',
-                content: `${selectedSentenceIndex + 1}번째 문장에 대한 문법 분석과 해석입니다...`
-            }]);
-            setIsLoading(false);
-        }, 1000);
-    };
-
-    const handleClassClick = (className: string) => {
-        setSelectedClass(className);
-        setTempStudents([]);
-        setShowStudentModal(true);
-    };
-
-    const handleStudentToggle = (student: Student) => {
-        setTempStudents(prev => {
+    // 2. Student Selection (Multi)
+    const toggleStudent = (student: Student) => {
+        setSelectedStudents(prev => {
             const exists = prev.find(s => s.id === student.id);
             if (exists) {
                 return prev.filter(s => s.id !== student.id);
@@ -184,107 +105,211 @@ export default function StudentChatInterface() {
         });
     };
 
-    const handleStudentConfirm = () => {
-        if (tempStudents.length > 0) {
-            setSelectedStudents(tempStudents);
-            setShowStudentModal(false);
-            setTempStudents([]);
+    const toggleClassGroup = (className: string, studentsInClass: Student[]) => {
+        const allSelected = studentsInClass.every(s => selectedStudents.some(sel => sel.id === s.id));
+        if (allSelected) {
+            setSelectedStudents(prev => prev.filter(s => !studentsInClass.some(sic => sic.id === s.id)));
+        } else {
+            const newSelections = studentsInClass.filter(s => !selectedStudents.some(sel => sel.id === s.id));
+            setSelectedStudents(prev => [...prev, ...newSelections]);
+        }
+    };
+
+    // 3. Send Message
+    const handleSendMessage = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!input.trim() || isLoading) return;
+
+        if (selectedStudents.length === 0) {
+            alert('학생을 먼저 선택해주세요.');
+            return;
+        }
+
+        if (!selectedQuestion) {
+            alert('문항을 선택해주세요.');
+            return;
+        }
+
+        const userMessage = input.trim();
+        setInput('');
+
+        const isGroupMsg = selectedStudents.length > 1;
+        setMessages(prev => [...prev, { role: 'user', content: userMessage, isGroup: isGroupMsg }]);
+        setIsLoading(true);
+
+        if (!roomInfo?.api_key) {
+            setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ API 키 미설정' }]);
+            setIsLoading(false);
+            return;
+        }
+
+        try {
+            const apiMessages = [
+                { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
+                { role: 'user', content: `[문항 정보]\n번호: ${selectedQuestion.examCode}\n주제: ${selectedQuestion.topic}\n지문: ${selectedQuestion.passage}\n\n질문: ${userMessage}` }
+            ];
+
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${roomInfo.api_key}` },
+                body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
+            });
+
+            const data = await response.json();
+            const aiContent = data.choices?.[0]?.message?.content || "응답 오류";
+            setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
+        } catch (error: any) {
+            setMessages(prev => [...prev, { role: 'assistant', content: `오류: ${error.message}` }]);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleFAQClick = async (index: number) => {
+        if (selectedStudents.length === 0) {
+            alert('학생을 먼저 선택해주세요.');
+            return;
+        }
+        if (!selectedQuestion) {
+            alert('문항을 먼저 선택해주세요!');
+            return;
+        }
+
+        if (index === 3) {
+            setShowSentenceModal(true);
+        } else {
+            const questionText = FAQ_QUESTIONS[index];
+            const isGroupMsg = selectedStudents.length > 1;
+
+            setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg }]);
+            setIsLoading(true);
+
+            if (!roomInfo?.api_key) return;
+
+            try {
+                const apiMessages = [
+                    { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
+                    { role: 'user', content: `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}\n\n질문: ${questionText}` }
+                ];
+                const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${roomInfo.api_key}` },
+                    body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
+                });
+                const data = await response.json();
+                const aiContent = data.choices?.[0]?.message?.content || "응답 오류";
+                setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
+            } catch (error: any) {
+                setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+    };
+
+    const handleSentenceSelect = async () => {
+        if (selectedSentenceIndex === null || !selectedQuestion) return;
+        const sentence = sentences[selectedSentenceIndex];
+        const questionText = `구두점 기준으로 ${selectedSentenceIndex + 1}번째 영어 문장을 문법적으로 분석하고 문맥에 맞게 해석해줘: "${sentence}"`;
+        const isGroupMsg = selectedStudents.length > 1;
+
+        setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg }]);
+        setShowSentenceModal(false);
+        setSelectedSentenceIndex(null);
+        setIsLoading(true);
+
+        if (!roomInfo?.api_key) return;
+        try {
+            const apiMessages = [
+                { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
+                { role: 'user', content: `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}\n\n요청: ${questionText}` }
+            ];
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${roomInfo.api_key}` },
+                body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
+            });
+            const data = await response.json();
+            setMessages(prev => [...prev, { role: 'assistant', content: data.choices[0].message.content }]);
+        } catch (e) { console.error(e); }
+        finally { setIsLoading(false); }
+    };
+
+    const handleSaveToDrive = async () => {
+        if (!roomInfo?.google_script_url || selectedStudents.length === 0) {
+            alert('설정 오류 또는 선택된 학생이 없습니다.');
+            return;
+        }
+        if (messages.length === 0) {
+            alert('저장할 대화 내용이 없습니다.');
+            return;
+        }
+
+        const confirmSave = window.confirm(`${selectedStudents.length}명의 학생 구글 문서에 대화 내용을 저장하고 종료하시겠습니까?`);
+        if (!confirmSave) return;
+
+        try {
+            setIsLoading(true);
+
+            // GAS Save
+            const savePromises = selectedStudents.map(student => {
+                const fileName = `[${(student as any).class || student.className || roomInfo.class_name}] ${student.number}번 ${student.name}`;
+                return fetch(roomInfo.google_script_url!, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        folderId: roomInfo.drive_folder_id,
+                        fileName: fileName,
+                        messages: messages
+                    })
+                });
+            });
+
+            await Promise.all(savePromises);
+
+            alert('저장 완료. 초기화면으로 이동합니다.');
+            setStep('room');
+            setMessages([]);
+            setSelectedStudents([]);
+            setSelectedQuestion(null);
+        } catch (error) {
+            console.error(error);
+            alert('저장 중 오류 발생 (하지만 성공했을 수 있습니다)');
+            setStep('room');
+        } finally {
+            setIsLoading(false);
         }
     };
 
     const handleQuestionConfirm = () => {
         if (tempQuestion) {
             setSelectedQuestion(tempQuestion);
+            // System message
+            setMessages(prev => [...prev, {
+                role: 'assistant',
+                content: `"${tempQuestion.examCode}" 문항이 선택되었습니다.`
+            }]);
             setShowQuestionModal(false);
             setTempQuestion(null);
         }
     };
 
-    const getStudentDisplayText = () => {
-        if (selectedStudents.length === 0) return '';
-        return selectedStudents.map(s => `${s.number}번 ${s.name}`).join(', ');
-    };
-
-    // Room Number Input Step
+    // --- Render ---
     if (step === 'room') {
         return (
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minHeight: '100vh',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                padding: '20px'
-            }}>
-                <div style={{
-                    background: 'white',
-                    borderRadius: '24px',
-                    padding: '48px',
-                    maxWidth: '500px',
-                    width: '100%',
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
-                }}>
-                    <div style={{
-                        fontSize: '48px',
-                        textAlign: 'center',
-                        marginBottom: '16px'
-                    }}>
-                        🏫
-                    </div>
-                    <h1 style={{
-                        fontSize: '28px',
-                        fontWeight: 900,
-                        textAlign: 'center',
-                        marginBottom: '12px',
-                        color: '#222'
-                    }}>
-                        AI 챗봇
-                    </h1>
-                    <p style={{
-                        textAlign: 'center',
-                        color: '#666',
-                        marginBottom: '32px',
-                        fontSize: '15px'
-                    }}>
-                        선생님이 알려주신 Room Number를 입력하세요
-                    </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
+                <div style={{ background: 'white', padding: '40px', borderRadius: '24px', textAlign: 'center', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏫</div>
+                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>AI 챗봇 교실</h1>
                     <form onSubmit={handleRoomSubmit}>
                         <input
                             type="text"
                             value={roomNumber}
                             onChange={(e) => setRoomNumber(e.target.value)}
-                            placeholder="Room Number 입력"
-                            style={{
-                                width: '100%',
-                                padding: '16px',
-                                fontSize: '16px',
-                                border: '2px solid #ddd',
-                                borderRadius: '12px',
-                                marginBottom: '16px',
-                                fontFamily: 'inherit',
-                                outline: 'none',
-                                transition: 'border-color 0.2s'
-                            }}
-                            onFocus={(e) => e.target.style.borderColor = '#667eea'}
-                            onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                            placeholder="Room Code"
+                            style={{ width: '100%', padding: '12px', fontSize: '20px', borderRadius: '12px', border: '2px solid #ddd', marginBottom: '16px', textAlign: 'center' }}
                         />
-                        <button
-                            type="submit"
-                            disabled={!roomNumber.trim()}
-                            style={{
-                                width: '100%',
-                                padding: '16px',
-                                fontSize: '16px',
-                                fontWeight: 'bold',
-                                background: roomNumber.trim() ? '#fee500' : '#eee',
-                                color: roomNumber.trim() ? '#222' : '#aaa',
-                                border: 'none',
-                                borderRadius: '12px',
-                                cursor: roomNumber.trim() ? 'pointer' : 'not-allowed',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            입장하기
+                        <button type="submit" disabled={isLoading} style={{ width: '100%', padding: '12px', background: '#fee500', border: 'none', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer' }}>
+                            {isLoading ? 'Loading...' : '입장하기'}
                         </button>
                     </form>
                 </div>
@@ -292,319 +317,235 @@ export default function StudentChatInterface() {
         );
     }
 
-    return (
-        <div className="student-layout">
-            {/* Left Panel: Chat Only */}
-            <div className="student-left-panel">
-                {/* Chat Area */}
-                <div style={{
-                    height: '100vh',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    background: 'white'
-                }}>
-                    <div className="student-chat-messages" style={{ flex: 1, padding: '16px' }}>
-                        {messages.length === 0 && (
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                height: '100%',
-                                color: '#999',
-                                fontSize: '15px'
-                            }}>
-                                오른쪽에서 학생을 먼저 선택한 후, 질문하고자 하는 문항을 선택하세요
+    if (step === 'chat' && roomInfo) {
+        const studentsByClass = allStudents.reduce((acc, student) => {
+            const cls = (student as any).class || student.className || '기타';
+            if (!acc[cls]) acc[cls] = [];
+            acc[cls].push(student);
+            return acc;
+        }, {} as Record<string, Student[]>);
+        const classList = Object.keys(studentsByClass).sort();
+
+        // Check if student selected
+        const isStudentSelected = selectedStudents.length > 0;
+
+        return (
+            <div className="sc-desktop-layout">
+                {/* Left: Chat Panel */}
+                <div className="sc-main-panel">
+                    <button className="sc-save-exit-btn" onClick={handleSaveToDrive}>
+                        <ArrowLeft size={18} /> 저장 후 종료
+                    </button>
+
+                    <div className="sc-chat-title-header">
+                        <span>🏫 {roomInfo.class_name} (Code: {roomNumber})</span>
+                    </div>
+
+                    <div className="sc-chat-desktop-area">
+                        {!selectedQuestion && (
+                            <div style={{ textAlign: 'center', marginTop: '100px', color: '#aaa' }}>
+                                <div style={{ fontSize: '32px', marginBottom: '20px' }}>👉</div>
+                                <div>오른쪽에서 학생과 문항을 선택해주세요.</div>
                             </div>
                         )}
-                        {messages.map((msg, idx) => (
-                            <div key={idx} style={{
-                                display: 'flex',
-                                justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                                marginBottom: '12px'
-                            }}>
-                                <div style={{
-                                    maxWidth: '70%',
-                                    padding: '12px 16px',
-                                    borderRadius: '18px',
-                                    background: msg.role === 'user' ? '#fee500' : '#f2f2f2',
-                                    color: msg.role === 'user' ? '#222' : '#333',
-                                    fontSize: '14px',
-                                    lineHeight: '1.6',
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
-                                }}>
-                                    {msg.content}
+
+                        {messages.map((msg, i) => (
+                            <div key={i} className={`sc-message-row ${msg.role}`}>
+                                <div className={`sc-message-bubble ${msg.role === 'user' ? (msg.isGroup ? 'sc-bubble-group' : 'sc-bubble-user') : 'sc-bubble-assistant'}`}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', fontSize: '11px', opacity: 0.8 }}>
+                                        {msg.role === 'user' ? (
+                                            msg.isGroup ? <><Users size={12} /> 모둠</> : <><User size={12} /> 나</>
+                                        ) : <><Bot size={12} /> AI</>}
+                                    </div>
+                                    <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
                                 </div>
                             </div>
                         ))}
-                        {isLoading && (
-                            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                                <div style={{
-                                    background: '#f2f2f2',
-                                    padding: '12px 16px',
-                                    borderRadius: '18px',
-                                    boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
-                                }}>
-                                    <div style={{ display: 'flex', gap: '4px' }}>
-                                        <div style={{ width: '6px', height: '6px', background: '#999', borderRadius: '50%' }}></div>
-                                        <div style={{ width: '6px', height: '6px', background: '#999', borderRadius: '50%' }}></div>
-                                        <div style={{ width: '6px', height: '6px', background: '#999', borderRadius: '50%' }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                        {isLoading && <div style={{ textAlign: 'center', color: '#999' }}>답변 생성 중...</div>}
                         <div ref={messagesEndRef} />
                     </div>
 
-                    <div className="student-chat-input-area">
-                        <form onSubmit={handleSendMessage} className="student-chat-input-form">
-                            <textarea
+                    <div className="sc-input-desktop-area" style={{ padding: '16px' }}>
+                        <form className="sc-input-form" onSubmit={handleSendMessage}>
+                            <input
+                                className="sc-input"
                                 value={input}
                                 onChange={e => setInput(e.target.value)}
-                                placeholder="질문을 입력하세요. Enter는 전송, Shift+Enter는 줄바꿈"
-                                className="student-chat-input"
+                                placeholder="질문을 입력하세요..."
                                 disabled={isLoading}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault();
-                                        handleSendMessage(e);
-                                    }
-                                }}
                             />
-                            <button
-                                type="submit"
-                                disabled={!input.trim() || isLoading}
-                                className="student-chat-send-button"
-                            >
-                                전송
+                            <button type="submit" className="sc-send-btn" disabled={isLoading || !isStudentSelected || !selectedQuestion}>
+                                <Send size={20} />
                             </button>
                         </form>
                     </div>
                 </div>
-            </div>
 
-            {/* Right Panel: Controls + FAQ */}
-            <div className="student-right-panel">
-                {/* Student Selector */}
-                <div className="student-selector-section" style={{ background: '#dbeafe' }}>
-                    <div className="student-selector-title" style={{ textAlign: 'center' }}>
-                        챗봇을 사용하는 학생을 선택해 주세요.
-                    </div>
-                    <div className="student-selector-buttons">
-                        {uniqueClasses.map(className => (
-                            <button
-                                key={className}
-                                onClick={() => handleClassClick(className)}
-                                className="student-selector-button"
-                            >
-                                {className}
-                            </button>
-                        ))}
-                    </div>
-                    {selectedStudents.length > 0 && (
-                        <div style={{
-                            marginTop: '12px',
-                            padding: '12px',
-                            background: 'white',
-                            borderRadius: '10px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            color: '#222',
-                            textAlign: 'center'
+                {/* Right: Sidebar Controls - Compact Mode */}
+                <div className="sc-sidebar-panel" style={{ padding: '12px', gap: '12px' }}>
+
+                    {/* Student Select (Blue) */}
+                    <div className="sc-card sc-card-blue" style={{ padding: '16px' }}>
+                        <div className="sc-card-title" style={{ color: '#1e40af', marginBottom: '8px', fontSize: '14px' }}>1. 학생 선택</div>
+
+                        <button
+                            className="sc-question-btn"
+                            style={{ background: '#2563eb', color: 'white', border: 'none', fontSize: '14px', padding: '10px' }}
+                            onClick={() => setShowStudentModal(true)}
+                        >
+                            <Users size={16} style={{ display: 'inline', marginRight: '6px' }} />
+                            학생 선택하기 (클릭)
+                        </button>
+
+                        <div className="sc-question-display" style={{
+                            fontSize: '12px', marginTop: '8px', textAlign: 'center',
+                            color: selectedStudents.length > 0 ? '#1e40af' : '#aaa',
+                            fontWeight: selectedStudents.length > 0 ? 'bold' : 'normal',
+                            maxHeight: '80px', overflowY: 'auto', whiteSpace: 'pre-wrap', lineHeight: '1.4'
                         }}>
-                            {getStudentDisplayText()}
+                            {selectedStudents.length === 0 ? '(선택 안됨)' :
+                                selectedStudents.map(s =>
+                                    `${s.class || s.className || ''} ${s.number}번 ${s.name}`
+                                ).join(', ')
+                            }
                         </div>
-                    )}
-                </div>
-
-                {/* Question Selector */}
-                <div className="student-selector-section" style={{ background: '#ffe4e6' }}>
-                    <div className="student-selector-title" style={{ textAlign: 'center' }}>
-                        질문하고 싶은 문항을 선택해 주세요.
                     </div>
-                    <button
-                        onClick={() => setShowQuestionModal(true)}
-                        disabled={selectedStudents.length === 0}
-                        className="student-question-button"
-                        style={{
-                            background: selectedStudents.length === 0 ? '#eee' : 'white',
-                            border: '2px solid #ddd',
-                            color: selectedStudents.length === 0 ? '#aaa' : '#222',
-                            cursor: selectedStudents.length === 0 ? 'not-allowed' : 'pointer',
-                            opacity: selectedStudents.length === 0 ? 0.6 : 1
-                        }}
-                    >
-                        문항 선택
-                    </button>
-                    {selectedQuestion && (
-                        <div style={{
-                            marginTop: '12px',
-                            padding: '12px',
-                            background: 'white',
-                            borderRadius: '10px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            color: '#222',
-                            textAlign: 'center'
-                        }}>
-                            {selectedQuestion.examCode}
+
+                    {/* Question Select (Pink) */}
+                    <div className="sc-card sc-card-pink" style={{ opacity: isStudentSelected ? 1 : 0.5, pointerEvents: isStudentSelected ? 'auto' : 'none', padding: '16px' }}>
+                        <div className="sc-card-title" style={{ color: '#be123c', marginBottom: '8px', fontSize: '14px' }}>2. 문항 선택</div>
+                        <button className="sc-question-btn" style={{ fontSize: '14px', padding: '10px' }} onClick={() => setShowQuestionModal(true)}>
+                            문항 선택
+                        </button>
+                        <div className="sc-question-display" style={{ fontSize: '12px' }}>
+                            {selectedQuestion ? `${selectedQuestion.examCode}` : '(선택 안됨)'}
                         </div>
-                    )}
-                </div>
-
-                {/* FAQ Section */}
-                <div className="faq-section">
-                    <div className="faq-title">FAQ</div>
-                    <div className="faq-buttons">
-                        {FAQ_QUESTIONS.map((question, index) => (
-                            <button
-                                key={index}
-                                onClick={() => handleFAQClick(index)}
-                                className="faq-button"
-                                disabled={!selectedQuestion}
-                                style={{
-                                    opacity: selectedQuestion ? 1 : 0.5,
-                                    cursor: selectedQuestion ? 'pointer' : 'not-allowed'
-                                }}
-                            >
-                                {question}
-                            </button>
-                        ))}
                     </div>
-                </div>
-            </div>
 
-            {/* Student Selection Modal */}
-            {showStudentModal && (
-                <div className="sentence-modal-overlay" onClick={() => setShowStudentModal(false)}>
-                    <div className="sentence-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="sentence-modal-header">
-                            <div className="sentence-modal-title">학생 선택</div>
-                            <div className="sentence-modal-subtitle">
-                                {selectedClass} - 복수 선택 가능
+                    {/* FAQ (Yellow) */}
+                    <div className="sc-card sc-card-yellow" style={{ opacity: (isStudentSelected && selectedQuestion) ? 1 : 0.5, pointerEvents: (isStudentSelected && selectedQuestion) ? 'auto' : 'none', padding: '16px' }}>
+                        <div className="sc-card-title" style={{ color: '#92400e', marginBottom: '8px', fontSize: '14px' }}>3. 추천 질문</div>
+                        <div className="sc-faq-list" style={{ gap: '6px' }}>
+                            {FAQ_QUESTIONS.map((q, i) => (
+                                <button key={i} className="sc-faq-item" onClick={() => handleFAQClick(i)} style={{ padding: '8px 12px', fontSize: '12px' }}>
+                                    {q}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                </div>
+
+                {/* Modals */}
+
+                {/* Student Selection Modal */}
+                {showStudentModal && (
+                    <div className="sc-modal-overlay" onClick={() => setShowStudentModal(false)}>
+                        <div className="sc-modal-box" style={{ maxWidth: '600px', maxHeight: '80vh' }} onClick={e => e.stopPropagation()}>
+                            <div className="sc-modal-header">
+                                <h3>학생 선택</h3>
+                                <button className="sc-modal-close-btn" onClick={() => setShowStudentModal(false)}>&times;</button>
+                            </div>
+                            <div className="sc-modal-body" style={{ background: '#f8fafc', padding: '20px' }}>
+                                {classList.map(cls => (
+                                    <div key={cls} style={{ marginBottom: '20px', background: 'white', padding: '16px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
+                                            <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#1e40af' }}>{cls}</span>
+                                            <button
+                                                onClick={() => toggleClassGroup(cls, studentsByClass[cls])}
+                                                style={{ fontSize: '12px', padding: '4px 10px', borderRadius: '6px', background: '#eff6ff', color: '#1e40af', border: 'none', cursor: 'pointer', fontWeight: '600' }}
+                                            >
+                                                {studentsByClass[cls].every(s => selectedStudents.some(sel => sel.id === s.id)) ? '전체 해제' : '전체 선택'}
+                                            </button>
+                                        </div>
+                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '8px' }}>
+                                            {studentsByClass[cls].map(s => {
+                                                const isSelected = selectedStudents.some(sel => sel.id === s.id);
+                                                return (
+                                                    <div
+                                                        key={s.id}
+                                                        onClick={() => toggleStudent(s)}
+                                                        style={{
+                                                            padding: '10px', borderRadius: '8px', border: '1px solid',
+                                                            borderColor: isSelected ? '#3b82f6' : '#e5e7eb',
+                                                            background: isSelected ? '#dbeafe' : 'white',
+                                                            color: isSelected ? '#1e40af' : '#4b5563',
+                                                            fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px'
+                                                        }}
+                                                    >
+                                                        {isSelected ? <CheckSquare size={16} className="text-blue-600" /> : <Square size={16} className="text-gray-300" />}
+                                                        <span style={{ fontWeight: isSelected ? 'bold' : 'normal' }}>{s.number} {s.name}</span>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="sc-modal-footer">
+                                <button className="sc-modal-confirm-btn" onClick={() => setShowStudentModal(false)}>
+                                    선택 완료 ({selectedStudents.length}명)
+                                </button>
                             </div>
                         </div>
-
-                        <div className="sentence-list">
-                            {classStudents.map((student) => (
-                                <button
-                                    key={student.id}
-                                    onClick={() => handleStudentToggle(student)}
-                                    className={`sentence-item ${tempStudents.find(s => s.id === student.id) ? 'selected' : ''}`}
-                                >
-                                    {student.number}번 {student.name}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="sentence-modal-footer">
-                            <button
-                                onClick={() => {
-                                    setShowStudentModal(false);
-                                    setTempStudents([]);
-                                }}
-                                className="sentence-modal-button sentence-modal-button-cancel"
-                            >
-                                닫기
-                            </button>
-                            <button
-                                onClick={handleStudentConfirm}
-                                disabled={tempStudents.length === 0}
-                                className="sentence-modal-button sentence-modal-button-confirm"
-                            >
-                                선택 완료 ({tempStudents.length}명)
-                            </button>
-                        </div>
                     </div>
-                </div>
-            )}
+                )}
 
-            {/* Question Selection Modal */}
-            {showQuestionModal && (
-                <div className="sentence-modal-overlay" onClick={() => setShowQuestionModal(false)}>
-                    <div className="sentence-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="sentence-modal-header">
-                            <div className="sentence-modal-title">문항 선택</div>
-                        </div>
-
-                        <div className="sentence-list">
-                            {MOCK_QUESTIONS.map((question) => (
-                                <button
-                                    key={question.id}
-                                    onClick={() => setTempQuestion(question)}
-                                    className={`sentence-item ${tempQuestion?.id === question.id ? 'selected' : ''}`}
-                                >
-                                    {question.examCode}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="sentence-modal-footer">
-                            <button
-                                onClick={() => {
-                                    setShowQuestionModal(false);
-                                    setTempQuestion(null);
-                                }}
-                                className="sentence-modal-button sentence-modal-button-cancel"
-                            >
-                                닫기
-                            </button>
-                            <button
-                                onClick={handleQuestionConfirm}
-                                disabled={tempQuestion === null}
-                                className="sentence-modal-button sentence-modal-button-confirm"
-                            >
-                                선택 완료
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Sentence Selection Modal */}
-            {showSentenceModal && (
-                <div className="sentence-modal-overlay" onClick={() => setShowSentenceModal(false)}>
-                    <div className="sentence-modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="sentence-modal-header">
-                            <div className="sentence-modal-title">문장 선택</div>
-                            <div className="sentence-modal-subtitle">
-                                구두점 기준으로 n번째 영어 문장을 분석하고 문맥에 맞게 해석해줘.
+                {showQuestionModal && (
+                    <div className="sc-modal-overlay" onClick={() => setShowQuestionModal(false)}>
+                        <div className="sc-modal-box" onClick={e => e.stopPropagation()}>
+                            <div className="sc-modal-header">
+                                <h3>문항 선택</h3>
+                                <button className="sc-modal-close-btn" onClick={() => setShowQuestionModal(false)}>&times;</button>
+                            </div>
+                            <div className="sc-modal-body">
+                                {roomQuestions.map(q => (
+                                    <div
+                                        key={q.id}
+                                        className={`sc-modal-item ${tempQuestion?.id === q.id ? 'selected' : ''}`}
+                                        onClick={() => setTempQuestion(q)}
+                                    >
+                                        <div style={{ fontWeight: 'bold', color: '#2563eb' }}>{q.examCode}</div>
+                                        <div style={{ fontSize: '13px', color: '#555' }}>{q.topic}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="sc-modal-footer">
+                                <button className="sc-modal-cancel-btn" onClick={() => setShowQuestionModal(false)}>취소</button>
+                                <button className="sc-modal-confirm-btn" onClick={handleQuestionConfirm} disabled={!tempQuestion}>선택 완료</button>
                             </div>
                         </div>
-
-                        <div className="sentence-list">
-                            {sentences.map((sentence, index) => (
-                                <button
-                                    key={index}
-                                    onClick={() => setSelectedSentenceIndex(index)}
-                                    className={`sentence-item ${selectedSentenceIndex === index ? 'selected' : ''}`}
-                                >
-                                    <span className="sentence-number">{index + 1}번째 문장</span>
-                                    {sentence}
-                                </button>
-                            ))}
-                        </div>
-
-                        <div className="sentence-modal-footer">
-                            <button
-                                onClick={() => {
-                                    setShowSentenceModal(false);
-                                    setSelectedSentenceIndex(null);
-                                }}
-                                className="sentence-modal-button sentence-modal-button-cancel"
-                            >
-                                닫기
-                            </button>
-                            <button
-                                onClick={handleSentenceSelect}
-                                disabled={selectedSentenceIndex === null}
-                                className="sentence-modal-button sentence-modal-button-confirm"
-                            >
-                                선택
-                            </button>
+                    </div>
+                )}
+                {showSentenceModal && (
+                    <div className="sc-modal-overlay" onClick={() => setShowSentenceModal(false)}>
+                        <div className="sc-modal-box" onClick={e => e.stopPropagation()}>
+                            <div className="sc-modal-header">
+                                <h3>문장 선택</h3>
+                                <button className="sc-modal-close-btn" onClick={() => setShowSentenceModal(false)}>&times;</button>
+                            </div>
+                            <div className="sc-modal-body">
+                                {sentences.map((s, i) => (
+                                    <div
+                                        key={i}
+                                        className={`sc-modal-item ${selectedSentenceIndex === i ? 'selected' : ''}`}
+                                        onClick={() => setSelectedSentenceIndex(i)}
+                                    >
+                                        <span style={{ fontWeight: 'bold', color: '#2563eb', marginRight: '8px' }}>{i + 1}</span>
+                                        {s}
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="sc-modal-footer">
+                                <button className="sc-modal-cancel-btn" onClick={() => setShowSentenceModal(false)}>취소</button>
+                                <button className="sc-modal-confirm-btn" onClick={handleSentenceSelect} disabled={selectedSentenceIndex === null}>분석 요청</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                )}
+            </div>
+        );
+    } // End Chat View
+
+    return null;
 }

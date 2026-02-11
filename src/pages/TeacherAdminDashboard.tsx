@@ -1,25 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
     LayoutDashboard, Users, BookOpen, Settings, Plus, Save,
-    Trash2, Upload, FileText, CheckCircle, Play, LogOut
+    Trash2, Upload, FileText, CheckCircle, Play, LogOut, Edit
 } from 'lucide-react';
 import type { Question, Room } from '../types';
 import { signIn, signUp, signOut, getCurrentUser } from '../lib/auth';
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion } from '../lib/questions';
+import { getStudents, createStudents, deleteStudent, type Student } from '../lib/students';
+import { getRooms, deleteRoom } from '../lib/rooms';
 
-/**
- * [Mock Data]
- * 백엔드 연동 전 UI 테스트용 데이터
- */
-const MOCK_QUESTIONS: Question[] = [
-    {
-        id: 1,
-        examCode: '2024-1학기-64번',
-        targetGrade: '고3',
-        topic: '환경 보호의 시급성',
-        logicFlow: '문제 제기 -> 원인 분석 -> 해결책 제시',
-        passage: 'Climate change is not just a distant threat...'
-    }
-];
+
+import { getTeacherSettings, updateTeacherSettings, getAppConfig, updateAppConfig } from '../lib/settings';
 
 type TeacherRole = 'master' | 'regular';
 
@@ -37,29 +28,30 @@ export default function TeacherAdminPage() {
 
     // Data States
     const [rooms, setRooms] = useState<Room[]>([]);
-    const [questions, setQuestions] = useState<Question[]>(MOCK_QUESTIONS);
+    const [questions, setQuestions] = useState<Question[]>([]);
 
     // Forms
     const [bulkStudentText, setBulkStudentText] = useState('');
     const [parsedStudents, setParsedStudents] = useState<{ class: string, number: string, name: string, competency: string }[]>([]);
-    const [savedStudents, setSavedStudents] = useState<{ class: string, number: string, name: string, competency: string }[]>([]);
+    const [savedStudents, setSavedStudents] = useState<Student[]>([]);
 
     const [newQuestion, setNewQuestion] = useState<Partial<Question>>({
         examCode: '', targetGrade: '고3', topic: '', logicFlow: '', passage: ''
     });
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
 
-    const [settings, setSettings] = useState({
-        driveId: '',
-        systemPrompt: '너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.',
-        apiKey: '',
-        maxQuestionsForRegular: 50
-    });
+    // Settings
+    const [apiKey, setApiKey] = useState('');
+    const [systemPrompt, setSystemPrompt] = useState('너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.');
+    const [driveFolderId, setDriveFolderId] = useState('');
+    const [googleScriptUrl, setGoogleScriptUrl] = useState('');
+    const [maxQuestionsLimit, setMaxQuestionsLimit] = useState(50);
+    const [limitInput, setLimitInput] = useState('50');
+    // Bridge for existing code compatibility
+    const maxQuestionsForRegular = maxQuestionsLimit;
 
-    // Room Creation Modal
-    const [showRoomModal, setShowRoomModal] = useState(false);
-    const [selectedClass, setSelectedClass] = useState<string>('');
-    const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
+    // Room Creation: Now handled via new window (RoomEditWindow)
+    // Removed old modal state
 
     // Student Table Sorting and Selection
     const [sortColumn, setSortColumn] = useState<'class' | 'number' | 'name' | 'competency'>('class');
@@ -78,6 +70,11 @@ export default function TeacherAdminPage() {
                 setTeacherEmail(user.email);
                 setTeacherRole(user.role);
                 setIsLogin(true);
+                loadQuestions();
+                loadStudents();
+                loadRooms();
+                loadSettings(user.id);
+                loadAppConfig();
             }
         }).catch(err => {
             console.error('세션 복원 실패:', err);
@@ -92,6 +89,10 @@ export default function TeacherAdminPage() {
             setTeacherEmail(user.email);
             setTeacherRole(user.role);
             setIsLogin(true);
+            // 로그인 후 문항, 학생, 수업 방 로드
+            loadQuestions();
+            loadStudents();
+            loadRooms();
         } catch (error: any) {
             alert('로그인 실패: ' + (error.message || '이메일 또는 비밀번호를 확인하세요'));
         }
@@ -117,8 +118,80 @@ export default function TeacherAdminPage() {
             setIsLogin(false);
             setTeacherEmail('');
             setTeacherRole('regular');
+
+            // Clear all sensitive states
+            setApiKey('');
+            setSystemPrompt('너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.');
+            setDriveFolderId('');
+            setGoogleScriptUrl('');
+
+            // Clear data
+            setRooms([]);
+            setQuestions([]);
+            setSavedStudents([]);
+            setParsedStudents([]);
+
+            // Reset Limits
+            setMaxQuestionsLimit(50);
+            setLimitInput('50');
+
         } catch (error: any) {
             alert('로그아웃 실패: ' + error.message);
+        }
+    };
+
+    // 문항 로드
+    const loadQuestions = async () => {
+        try {
+            const data = await getQuestions();
+            setQuestions(data);
+        } catch (error: any) {
+            console.error('문항 로드 실패:', error);
+            alert('문항을 불러오는데 실패했습니다: ' + error.message);
+        }
+    };
+
+    // 수업 방 로드
+    const loadRooms = async () => {
+        try {
+            const data = await getRooms();
+            setRooms(data);
+        } catch (error: any) {
+            console.error('수업 방 로드 실패:', error);
+            // alert('수업 방을 불러오는데 실패했습니다: ' + error.message);
+        }
+    };
+
+    // 학생 로드
+    const loadStudents = async () => {
+        try {
+            const data = await getStudents();
+            setSavedStudents(data);
+        } catch (error: any) {
+            console.error('학생 로드 실패:', error);
+            alert('학생을 불러오는데 실패했습니다: ' + error.message);
+        }
+    };
+
+    // 설정 로드
+    const loadSettings = async (userId: string) => {
+        try {
+            const data = await getTeacherSettings(userId);
+            // Always set state to overwite potential stale data
+            setApiKey(data.openai_api_key || '');
+            setSystemPrompt(data.system_prompt || '너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.');
+            setDriveFolderId(data.drive_folder_id || '');
+            setGoogleScriptUrl(data.google_script_url || '');
+        } catch (error) {
+            console.error('설정 로드 실패:', error);
+        }
+    };
+
+    const loadAppConfig = async () => {
+        const limit = await getAppConfig('limit_regular_questions');
+        if (limit) {
+            setMaxQuestionsLimit(Number(limit));
+            setLimitInput(limit);
         }
     };
 
@@ -141,21 +214,31 @@ export default function TeacherAdminPage() {
         setParsedStudents(parsed);
     };
 
-    const handleSaveStudents = () => {
-        setSavedStudents([...savedStudents, ...parsedStudents]);
-        alert(`${parsedStudents.length}명의 학생이 데이터베이스에 등록되었습니다.`);
-        setBulkStudentText('');
-        setParsedStudents([]);
+    const handleSaveStudents = async () => {
+        if (parsedStudents.length === 0) {
+            alert('등록할 학생이 없습니다.');
+            return;
+        }
+
+        try {
+            await createStudents(parsedStudents);
+            await loadStudents(); // 학생 목록 새로고침
+            alert(`${parsedStudents.length}명의 학생이 데이터베이스에 등록되었습니다.`);
+            setBulkStudentText('');
+            setParsedStudents([]);
+        } catch (error: any) {
+            alert('학생 등록 실패: ' + error.message);
+        }
     };
 
     const canAddQuestion = () => {
         if (teacherRole === 'master') return true;
-        return questions.length < settings.maxQuestionsForRegular;
+        return questions.length < maxQuestionsForRegular;
     };
 
-    const handleAddQuestion = () => {
+    const handleAddQuestion = async () => {
         if (!canAddQuestion()) {
-            alert(`일반 교사는 최대 ${settings.maxQuestionsForRegular}개까지만 문항을 등록할 수 있습니다.`);
+            alert(`일반 교사는 최대 ${maxQuestionsForRegular}개까지만 문항을 등록할 수 있습니다.`);
             return;
         }
 
@@ -163,40 +246,107 @@ export default function TeacherAdminPage() {
             alert('기출 번호와 본문은 필수입니다.');
             return;
         }
-        const q: Question = {
-            id: Date.now(),
-            examCode: newQuestion.examCode!,
-            targetGrade: newQuestion.targetGrade!,
-            topic: newQuestion.topic!,
-            logicFlow: newQuestion.logicFlow!,
-            passage: newQuestion.passage!
-        };
-        setQuestions([...questions, q]);
-        setNewQuestion({ examCode: '', targetGrade: '고3', topic: '', logicFlow: '', passage: '' });
+
+        try {
+            const q: Omit<Question, 'id'> = {
+                examCode: newQuestion.examCode!,
+                targetGrade: newQuestion.targetGrade!,
+                topic: newQuestion.topic!,
+                logicFlow: flowSteps.filter(s => s.trim()).join('\n'),  // flowSteps에서 가져오기
+                passage: newQuestion.passage!
+            };
+
+            await createQuestion(q);
+            await loadQuestions(); // 문항 목록 새로고침
+            setNewQuestion({ examCode: '', targetGrade: '고3', topic: '', logicFlow: '', passage: '' });
+            setFlowSteps(['']);  // flowSteps도 초기화
+            alert('문항이 추가되었습니다.');
+        } catch (error: any) {
+            alert('문항 추가 실패: ' + error.message);
+        }
+    };
+
+    const handleUpdateQuestion = async () => {
+        if (!editingQuestion) return;
+
+        try {
+            const updates: Partial<Omit<Question, 'id'>> = {
+                examCode: newQuestion.examCode,
+                targetGrade: newQuestion.targetGrade,
+                topic: newQuestion.topic,
+                logicFlow: flowSteps.filter(s => s.trim()).join('\n'),
+                passage: newQuestion.passage
+            };
+
+            await updateQuestion(editingQuestion.id, updates);
+            await loadQuestions();
+            setEditingQuestion(null);
+            setNewQuestion({ examCode: '', targetGrade: '고3', topic: '', logicFlow: '', passage: '' });
+            setFlowSteps(['']);
+            alert('문항이 수정되었습니다.');
+        } catch (error: any) {
+            alert('문항 수정 실패: ' + error.message);
+        }
+    };
+
+    const handleDeleteQuestion = async (id: number) => {
+        if (!confirm('정말 이 문항을 삭제하시겠습니까?')) return;
+
+        try {
+            await deleteQuestion(id);
+            await loadQuestions();
+            alert('문항이 삭제되었습니다.');
+        } catch (error: any) {
+            alert('문항 삭제 실패: ' + error.message);
+        }
     };
 
     const handleCreateRoom = () => {
-        setShowRoomModal(true);
+        const width = 600;
+        const height = 800;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        window.open(
+            '/?page=room-edit', // No ID implies Create Mode
+            'RoomCreate',
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
     };
 
-    const handleConfirmCreateRoom = () => {
-        if (!selectedClass || selectedQuestions.length === 0) {
-            alert('학급과 문항을 선택해주세요.');
-            return;
-        }
+    const handleEditRoom = (room: Room) => {
+        const width = 600;
+        const height = 800;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+        window.open(
+            `/?page=room-edit&id=${room.id}`,
+            'RoomEdit',
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+    };
 
-        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-        const newRoom: Room = {
-            code,
-            className: selectedClass,
-            folderName: `문항 ${selectedQuestions.length}개`,
-            isActive: true,
-            createdAt: new Date().toLocaleString('ko-KR')
+    useEffect(() => {
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data === 'roomUpdated') {
+                loadRooms();
+            }
         };
-        setRooms([...rooms, newRoom]);
-        setShowRoomModal(false);
-        setSelectedClass('');
-        setSelectedQuestions([]);
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, []);
+
+
+
+    const handleDeleteRoom = async (id: number) => {
+        if (!confirm('정말 이 수업 방을 삭제하시겠습니까?')) return;
+
+        try {
+            await deleteRoom(id);
+            await loadRooms();
+            alert('수업 방이 삭제되었습니다.');
+        } catch (error: any) {
+            alert('수업 방 삭제 실패: ' + error.message);
+        }
     };
 
     const handleEditQuestion = (q: Question) => {
@@ -204,23 +354,6 @@ export default function TeacherAdminPage() {
         setNewQuestion(q);
         // Split by newline or ' -> ' for backward compatibility
         setFlowSteps(q.logicFlow ? q.logicFlow.split(/\r?\n| -> /) : ['']);
-    };
-
-    const handleUpdateQuestion = () => {
-        if (!editingQuestion) return;
-
-        const updatedQuestions = questions.map(q =>
-            q.id === editingQuestion.id ? {
-                ...editingQuestion,
-                ...newQuestion,
-                logicFlow: flowSteps.filter(s => s.trim()).join('\n')
-            } : q
-        );
-        setQuestions(updatedQuestions);
-        setEditingQuestion(null);
-        setNewQuestion({ examCode: '', targetGrade: '고3', topic: '', logicFlow: '', passage: '' });
-        setFlowSteps(['']);
-        alert('문항이 수정되었습니다.');
     };
 
     const handleCancelEdit = () => {
@@ -252,29 +385,52 @@ export default function TeacherAdminPage() {
         }
     };
 
-    const handleDeleteSelectedStudents = () => {
-        const newStudents = savedStudents.filter((_, idx) => !selectedStudentsForDeletion.includes(idx));
-        setSavedStudents(newStudents);
-        setSelectedStudentsForDeletion([]);
-        alert(`${selectedStudentsForDeletion.length}명의 학생이 삭제되었습니다.`);
+    const handleDeleteSelectedStudents = async () => {
+        if (selectedStudentsForDeletion.length === 0) return;
+
+        if (!confirm(`선택한 ${selectedStudentsForDeletion.length}명의 학생을 삭제하시겠습니까?`)) return;
+
+        try {
+            // 선택된 인덱스를 실제 학생 ID로 변환
+            const idsToDelete = selectedStudentsForDeletion.map(index => savedStudents[index].id);
+
+            // deleteStudents 함수 import
+            const { deleteStudents } = await import('../lib/students');
+            await deleteStudents(idsToDelete);
+
+            await loadStudents();
+            setSelectedStudentsForDeletion([]);
+            alert(`${selectedStudentsForDeletion.length}명의 학생이 삭제되었습니다.`);
+        } catch (error: any) {
+            alert('학생 삭제 실패: ' + error.message);
+        }
     };
 
-    const handleSaveSettings = () => {
-        alert('설정이 저장되었습니다.');
+    const handleSaveSettings = async () => {
+        try {
+            const user = await getCurrentUser();
+            if (!user) return;
+
+            // 1. Personal Settings
+            await updateTeacherSettings(user.id, {
+                openai_api_key: apiKey,
+                system_prompt: systemPrompt,
+                drive_folder_id: driveFolderId,
+                google_script_url: googleScriptUrl
+            });
+
+            // 2. Global Config (Master Only)
+            if (teacherRole === 'master') {
+                await updateAppConfig('limit_regular_questions', limitInput);
+                setMaxQuestionsLimit(Number(limitInput));
+            }
+
+            alert('설정이 저장되었습니다.');
+        } catch (error: any) {
+            alert('설정 저장 실패: ' + error.message);
+        }
     };
 
-    // Get unique classes from saved students
-    const uniqueClasses = Array.from(new Set(savedStudents.map(s => s.class))).sort();
-
-    const toggleQuestionSelection = (questionId: number) => {
-        setSelectedQuestions(prev =>
-            prev.includes(questionId)
-                ? prev.filter(id => id !== questionId)
-                : [...prev, questionId]
-        );
-    };
-
-    // Sort saved students
     const sortedStudents = [...savedStudents].sort((a, b) => {
         let aVal: any = a[sortColumn];
         let bVal: any = b[sortColumn];
@@ -480,7 +636,7 @@ export default function TeacherAdminPage() {
                             </div>
                         ) : (
                             rooms.map((room) => (
-                                <div key={room.code} className="teacher-room-card">
+                                <div key={room.id} className="teacher-room-card">
                                     <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                                         <div className="teacher-room-code">
                                             {room.code}
@@ -491,16 +647,27 @@ export default function TeacherAdminPage() {
                                             </div>
                                             <div style={{ fontSize: '13px', color: '#666', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                                 <span style={{ width: '8px', height: '8px', background: '#10b981', borderRadius: '50%' }}></span>
-                                                수업 진행 중 • {room.createdAt}
+                                                수업 진행 중 • {room.createdAt ? new Date(room.createdAt).toLocaleString('ko-KR') : '-'}
+                                                {room.folderName && <span style={{ marginLeft: '8px', color: '#888' }}>({room.folderName})</span>}
                                             </div>
                                         </div>
                                     </div>
-                                    <button
-                                        onClick={() => setRooms(rooms.filter(r => r.code !== room.code))}
-                                        className="teacher-button-danger"
-                                    >
-                                        종료
-                                    </button>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button
+                                            onClick={() => handleEditRoom(room)}
+                                            className="teacher-button-secondary"
+                                            title="수정"
+                                        >
+                                            <Edit size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteRoom(room.id)}
+                                            className="teacher-button-danger"
+                                            title="종료(삭제)"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))
                         )}
@@ -514,13 +681,13 @@ export default function TeacherAdminPage() {
                             <h1 className="teacher-section-title">학습 자료 관리</h1>
                             <p className="teacher-section-subtitle">
                                 문항을 추가하고 관리하세요.
-                                {teacherRole === 'regular' && ` (${questions.length}/${settings.maxQuestionsForRegular}개)`}
+                                {teacherRole === 'regular' && ` (${questions.length}/${maxQuestionsForRegular}개)`}
                             </p>
                         </div>
 
-                        {teacherRole === 'regular' && questions.length >= settings.maxQuestionsForRegular && (
+                        {teacherRole === 'regular' && questions.length >= maxQuestionsForRegular && (
                             <div className="teacher-alert-warning">
-                                ⚠️ 일반 교사는 최대 {settings.maxQuestionsForRegular}개까지만 문항을 등록할 수 있습니다.
+                                ⚠️ 일반 교사는 최대 {maxQuestionsForRegular}개까지만 문항을 등록할 수 있습니다.
                             </div>
                         )}
 
@@ -715,10 +882,10 @@ export default function TeacherAdminPage() {
                                                 className="teacher-button-secondary"
                                                 style={{ padding: '8px 16px', fontSize: '13px' }}
                                             >
-                                                수정
+                                                <Edit size={16} />
                                             </button>
                                             <button
-                                                onClick={() => setQuestions(questions.filter(qi => qi.id !== q.id))}
+                                                onClick={() => handleDeleteQuestion(q.id)}
                                                 className="teacher-button-danger"
                                             >
                                                 <Trash2 size={16} />
@@ -902,6 +1069,29 @@ export default function TeacherAdminPage() {
                             <p className="teacher-section-subtitle">시스템 설정을 관리하세요.</p>
                         </div>
 
+
+                        {/* Master Config Section */}
+                        {teacherRole === 'master' && (
+                            <div className="teacher-content-card" style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}>
+                                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e40af' }}>
+                                    🛠️ 시스템 설정 (관리자 전용)
+                                </h3>
+                                <div className="teacher-input-group">
+                                    <label className="teacher-input-label">일반 교사 문항 등록 제한 수</label>
+                                    <input
+                                        type="number"
+                                        className="teacher-input-field"
+                                        value={limitInput}
+                                        onChange={e => setLimitInput(e.target.value)}
+                                        placeholder="50"
+                                    />
+                                    <div className="teacher-alert-info">
+                                        모든 일반 교사에게 적용되는 문항 등록 최대 개수입니다.
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* API Key */}
                         <div className="teacher-content-card">
                             <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
@@ -913,8 +1103,8 @@ export default function TeacherAdminPage() {
                                     type="password"
                                     className="teacher-input-field"
                                     placeholder="sk-..."
-                                    value={settings.apiKey}
-                                    onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
+                                    value={apiKey}
+                                    onChange={e => setApiKey(e.target.value)}
                                 />
                                 <div className="teacher-alert-info">
                                     🔒 API 키는 암호화되어 저장되며, 본인만 접근 가능합니다.
@@ -922,51 +1112,40 @@ export default function TeacherAdminPage() {
                             </div>
                         </div>
 
-                        {/* Google Drive Folder ID */}
+                        {/* Google Drive Integration */}
                         <div className="teacher-content-card">
                             <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                📁 구글 드라이브 폴더 ID
+                                📁 구글 드라이브 연동 (선택 사항)
                             </h3>
+
                             <div className="teacher-input-group">
-                                <label className="teacher-input-label">폴더 ID</label>
+                                <label className="teacher-input-label">Google Apps Script URL (웹 앱 URL)</label>
+                                <input
+                                    type="text"
+                                    className="teacher-input-field"
+                                    placeholder="https://script.google.com/macros/s/.../exec"
+                                    value={googleScriptUrl}
+                                    onChange={e => setGoogleScriptUrl(e.target.value)}
+                                />
+                                <div className="teacher-alert-info">
+                                    대화 내용을 구글 드라이브에 저장하려면, 배포된 Apps Script의 웹 앱 URL을 입력하세요.
+                                </div>
+                            </div>
+
+                            <div className="teacher-input-group">
+                                <label className="teacher-input-label">구글 드라이브 폴더 ID</label>
                                 <input
                                     type="text"
                                     className="teacher-input-field"
                                     placeholder="1AbC2DeF3GhI4JkL5MnO6PqR7StU8VwX9YzA"
-                                    value={settings.driveId}
-                                    onChange={e => setSettings({ ...settings, driveId: e.target.value })}
+                                    value={driveFolderId}
+                                    onChange={e => setDriveFolderId(e.target.value)}
                                 />
                                 <div className="teacher-alert-info">
-                                    💡 학생 대화 내용이 저장될 구글 드라이브 폴더의 ID를 입력하세요.
-                                    <br />
-                                    폴더 URL에서 <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px' }}>folders/</code> 뒤의 문자열을 복사하세요.
+                                    대화 내용이 저장될 폴더의 ID입니다. (URL의 folders/ 뒷부분)
                                 </div>
                             </div>
                         </div>
-
-
-                        {/* Master Only: Question Limit */}
-                        {teacherRole === 'master' && (
-                            <div className="teacher-content-card">
-                                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                    일반 교사 문항 제한 설정
-                                </h3>
-                                <div className="teacher-input-group">
-                                    <label className="teacher-input-label">최대 문항 수</label>
-                                    <input
-                                        type="number"
-                                        className="teacher-input-field"
-                                        value={settings.maxQuestionsForRegular}
-                                        onChange={e => setSettings({ ...settings, maxQuestionsForRegular: Number(e.target.value) })}
-                                        min={1}
-                                        max={1000}
-                                    />
-                                    <div className="teacher-alert-info">
-                                        일반 교사가 등록할 수 있는 최대 문항 수를 설정합니다. (마스터 교사는 무제한)
-                                    </div>
-                                </div>
-                            </div>
-                        )}
 
                         {/* System Prompt */}
                         <div className="teacher-content-card">
@@ -978,8 +1157,8 @@ export default function TeacherAdminPage() {
                                 <textarea
                                     rows={4}
                                     className="teacher-textarea"
-                                    value={settings.systemPrompt}
-                                    onChange={e => setSettings({ ...settings, systemPrompt: e.target.value })}
+                                    value={systemPrompt || ''}
+                                    onChange={e => setSystemPrompt(e.target.value)}
                                 />
                                 <div className="teacher-alert-info">
                                     모든 대화에 기본적으로 적용되는 AI의 성격입니다.
@@ -997,98 +1176,8 @@ export default function TeacherAdminPage() {
 
             </main>
 
-            {/* Room Creation Modal */}
-            {showRoomModal && (
-                <div className="modal-overlay" onClick={() => setShowRoomModal(false)}>
-                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-                        <div className="modal-header">
-                            <h2>새 수업 방 만들기</h2>
-                            <button onClick={() => setShowRoomModal(false)} className="modal-close">×</button>
-                        </div>
 
-                        <div className="modal-body">
-                            {/* Class Selection */}
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">학급 선택</label>
-                                {uniqueClasses.length === 0 ? (
-                                    <div className="teacher-alert-warning">
-                                        ⚠️ 등록된 학급이 없습니다. 먼저 학생 명단을 등록해주세요.
-                                    </div>
-                                ) : (
-                                    <select
-                                        className="teacher-input-field"
-                                        value={selectedClass}
-                                        onChange={(e) => setSelectedClass(e.target.value)}
-                                    >
-                                        <option value="">학급을 선택하세요</option>
-                                        {uniqueClasses.map((cls) => (
-                                            <option key={cls} value={cls}>{cls}</option>
-                                        ))}
-                                    </select>
-                                )}
-                            </div>
-
-                            {/* Question Selection */}
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">
-                                    문항 선택 ({selectedQuestions.length}개 선택됨)
-                                </label>
-                                {questions.length === 0 ? (
-                                    <div className="teacher-alert-warning">
-                                        ⚠️ 등록된 문항이 없습니다. 먼저 학습 자료를 등록해주세요.
-                                    </div>
-                                ) : (
-                                    <div style={{ maxHeight: '300px', overflowY: 'auto', border: '2px solid #e5e5e5', borderRadius: '12px', padding: '12px' }}>
-                                        {questions.map((q) => (
-                                            <div
-                                                key={q.id}
-                                                onClick={() => toggleQuestionSelection(q.id)}
-                                                style={{
-                                                    padding: '12px',
-                                                    marginBottom: '8px',
-                                                    borderRadius: '8px',
-                                                    border: selectedQuestions.includes(q.id) ? '2px solid #3b82f6' : '1px solid #e5e5e5',
-                                                    background: selectedQuestions.includes(q.id) ? '#eff6ff' : 'white',
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                            >
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={selectedQuestions.includes(q.id)}
-                                                        onChange={() => { }}
-                                                        style={{ width: '16px', height: '16px' }}
-                                                    />
-                                                    <span className="teacher-question-badge">{q.examCode}</span>
-                                                    <span style={{ fontWeight: 'bold', fontSize: '14px' }}>{q.topic}</span>
-                                                </div>
-                                                <div style={{ fontSize: '12px', color: '#666', marginLeft: '24px' }}>
-                                                    {q.targetGrade} • {q.logicFlow}
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="modal-footer">
-                            <button onClick={() => setShowRoomModal(false)} className="teacher-button-secondary">
-                                취소
-                            </button>
-                            <button
-                                onClick={handleConfirmCreateRoom}
-                                disabled={!selectedClass || selectedQuestions.length === 0}
-                                className="teacher-button-primary"
-                            >
-                                <Plus size={18} /> 방 생성
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+        </div >
     );
 }
 

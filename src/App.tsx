@@ -1,34 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import StudentChatInterface from './pages/StudentChatInterface';
 import TeacherAdminPage from './pages/TeacherAdminDashboard';
+import RoomEditWindow from './pages/RoomEditWindow';
 import { GraduationCap, School } from 'lucide-react';
 
 function App() {
-  const [view, setView] = useState<'landing' | 'student' | 'teacher'>('landing');
+  const [view, setView] = useState<'landing' | 'student' | 'teacher' | 'room-edit'>('landing');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('page') === 'room-edit') {
+      setView('room-edit');
+    }
+  }, []);
+
+  if (view === 'room-edit') {
+    return <RoomEditWindow />;
+  }
 
   if (view === 'student') {
     return (
       <div style={{ background: '#e5e5e5', minHeight: '100vh' }}>
-        <button
-          onClick={() => setView('landing')}
-          style={{
-            position: 'fixed',
-            top: '16px',
-            right: '16px',
-            zIndex: 50,
-            background: 'rgba(255,255,255,0.9)',
-            padding: '8px 12px',
-            borderRadius: '999px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-            border: 'none',
-            fontSize: '12px',
-            fontWeight: 'bold',
-            color: '#666',
-            cursor: 'pointer'
-          }}
-        >
-          ← 뒤로가기
-        </button>
+
         <StudentChatInterface />
       </div>
     );
