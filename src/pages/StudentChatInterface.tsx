@@ -12,6 +12,14 @@ const FAQ_QUESTIONS = [
 ];
 
 export default function StudentChatInterface() {
+    // Helper for bold text
+    const formatMessage = (content: string) => {
+        const parts = content.split('**');
+        return parts.map((part, index) =>
+            index % 2 === 1 ? <strong key={index}>{part}</strong> : part
+        );
+    };
+
     // --- State Management ---
     const [step, setStep] = useState<'room' | 'chat'>('room');
     const [roomNumber, setRoomNumber] = useState('');
@@ -357,7 +365,8 @@ export default function StudentChatInterface() {
                                             msg.isGroup ? <><Users size={12} /> 모둠</> : <><User size={12} /> 나</>
                                         ) : <><Bot size={12} /> AI</>}
                                     </div>
-                                    <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
+
+                                    <div style={{ whiteSpace: 'pre-wrap' }}>{formatMessage(msg.content)}</div>
                                 </div>
                             </div>
                         ))}
