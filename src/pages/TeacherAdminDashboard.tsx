@@ -367,7 +367,9 @@ export default function TeacherAdminPage() {
                             className="teacher-login-button"
                             disabled={!loginEmail.trim() || !loginPassword.trim()}
                             style={{
-                                opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.5,
+                                background: (loginEmail.trim() && loginPassword.trim()) ? '#3b82f6' : '#e5e7eb',
+                                color: (loginEmail.trim() && loginPassword.trim()) ? 'white' : '#9ca3af',
+                                opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.6,
                                 cursor: (loginEmail.trim() && loginPassword.trim()) ? 'pointer' : 'not-allowed',
                                 transition: 'all 0.2s'
                             }}
@@ -919,6 +921,29 @@ export default function TeacherAdminPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Google Drive Folder ID */}
+                        <div className="teacher-content-card">
+                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
+                                📁 구글 드라이브 폴더 ID
+                            </h3>
+                            <div className="teacher-input-group">
+                                <label className="teacher-input-label">폴더 ID</label>
+                                <input
+                                    type="text"
+                                    className="teacher-input-field"
+                                    placeholder="1AbC2DeF3GhI4JkL5MnO6PqR7StU8VwX9YzA"
+                                    value={settings.driveId}
+                                    onChange={e => setSettings({ ...settings, driveId: e.target.value })}
+                                />
+                                <div className="teacher-alert-info">
+                                    💡 학생 대화 내용이 저장될 구글 드라이브 폴더의 ID를 입력하세요.
+                                    <br />
+                                    폴더 URL에서 <code style={{ background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px' }}>folders/</code> 뒤의 문자열을 복사하세요.
+                                </div>
+                            </div>
+                        </div>
+
 
                         {/* Master Only: Question Limit */}
                         {teacherRole === 'master' && (
