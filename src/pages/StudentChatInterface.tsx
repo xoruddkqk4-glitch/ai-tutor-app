@@ -61,6 +61,9 @@ export default function StudentChatInterface() {
     // Temporary selections
     const [tempQuestion, setTempQuestion] = useState<Question | null>(null);
 
+    // Track if this is a new session for Google Docs header
+    const isNewDocSession = useRef(true);
+
     // Auto-scroll
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -175,11 +178,41 @@ export default function StudentChatInterface() {
 
             const data = await response.json();
             const aiContent = data.choices?.[0]?.message?.content || "응답 오류";
-            setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
+            const aiMsg: Message = { role: 'assistant', content: aiContent };
+            setMessages(prev => [...prev, aiMsg]);
+
+            // Real-time save
+            saveTurnToGAS(userMessage, aiMsg, isGroupMsg);
         } catch (error: any) {
             setMessages(prev => [...prev, { role: 'assistant', content: `오류: ${error.message}` }]);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const saveTurnToGAS = async (userMsgText: string, aiMsg: Message, isGroup: boolean) => {
+        if (!roomInfo?.google_script_url || selectedStudents.length === 0) return;
+
+        try {
+            const userMsgObj: Message = { role: 'user', content: userMsgText, isGroup };
+
+            const savePromises = selectedStudents.map(student => {
+                const fileName = `[${(student as any).class || student.className || roomInfo.class_name}] ${student.number}번 ${student.name}`;
+                return fetch(roomInfo.google_script_url!, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        folderId: roomInfo.drive_folder_id,
+                        fileName: fileName,
+                        messages: [userMsgObj, aiMsg],
+                        isNewSession: isNewDocSession.current
+                    })
+                });
+            });
+
+            await Promise.all(savePromises);
+            isNewDocSession.current = false; // After first save, no more header for this entrance
+        } catch (error) {
+            console.error("Auto-save failed:", error);
         }
     };
 
@@ -221,7 +254,11 @@ export default function StudentChatInterface() {
                 });
                 const data = await response.json();
                 const aiContent = data.choices?.[0]?.message?.content || "응답 오류";
-                setMessages(prev => [...prev, { role: 'assistant', content: aiContent }]);
+                const aiMsg: Message = { role: 'assistant', content: aiContent };
+                setMessages(prev => [...prev, aiMsg]);
+
+                // Real-time save
+                saveTurnToGAS(questionText, aiMsg, isGroupMsg);
             } catch (error: any) {
                 setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
             } finally {
@@ -258,54 +295,25 @@ export default function StudentChatInterface() {
                 body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
             });
             const data = await response.json();
-            setMessages(prev => [...prev, { role: 'assistant', content: data.choices[0].message.content }]);
+            const aiMsg: Message = { role: 'assistant', content: data.choices[0].message.content };
+            setMessages(prev => [...prev, aiMsg]);
+
+            // Real-time save
+            saveTurnToGAS(questionText, aiMsg, isGroupMsg);
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
     };
 
-    const handleSaveToDrive = async () => {
-        if (!roomInfo?.google_script_url || selectedStudents.length === 0) {
-            alert('설정 오류 또는 선택된 학생이 없습니다.');
-            return;
+    const handleBackToRoom = () => {
+        if (messages.length > 0) {
+            const confirmBack = window.confirm('대화가 종료됩니다. 초기 화면으로 돌아가시겠습니까?');
+            if (!confirmBack) return;
         }
-        if (messages.length === 0) {
-            alert('저장할 대화 내용이 없습니다.');
-            return;
-        }
-
-        const confirmSave = window.confirm(`${selectedStudents.length}명의 학생 구글 문서에 대화 내용을 저장하고 종료하시겠습니까?`);
-        if (!confirmSave) return;
-
-        try {
-            setIsLoading(true);
-
-            // GAS Save
-            const savePromises = selectedStudents.map(student => {
-                const fileName = `[${(student as any).class || student.className || roomInfo.class_name}] ${student.number}번 ${student.name}`;
-                return fetch(roomInfo.google_script_url!, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        folderId: roomInfo.drive_folder_id,
-                        fileName: fileName,
-                        messages: messages
-                    })
-                });
-            });
-
-            await Promise.all(savePromises);
-
-            alert('저장 완료. 초기화면으로 이동합니다.');
-            setStep('room');
-            setMessages([]);
-            setSelectedStudents([]);
-            setSelectedQuestion(null);
-        } catch (error) {
-            console.error(error);
-            alert('저장 중 오류 발생 (하지만 성공했을 수 있습니다)');
-            setStep('room');
-        } finally {
-            setIsLoading(false);
-        }
+        setStep('room');
+        setMessages([]);
+        setSelectedStudents([]);
+        setSelectedQuestion(null);
+        isNewDocSession.current = true; // Reset session flag
     };
 
     const handleQuestionConfirm = () => {
@@ -361,8 +369,8 @@ export default function StudentChatInterface() {
             <div className="sc-desktop-layout">
                 {/* Left: Chat Panel */}
                 <div className="sc-main-panel">
-                    <button className="sc-save-exit-btn" onClick={handleSaveToDrive}>
-                        <ArrowLeft size={18} /> 저장 후 종료
+                    <button className="sc-save-exit-btn" onClick={handleBackToRoom}>
+                        <ArrowLeft size={18} /> 뒤로가기
                     </button>
 
                     <div className="sc-chat-title-header">
