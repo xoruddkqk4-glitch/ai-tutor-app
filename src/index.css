@@ -1,0 +1,1418 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Global Styles */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Noto Sans KR', system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    background: #e5e5e5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar Hide Utility */
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+/* Chat Container - KakaoTalk Style */
+.chat-container {
+    max-width: 420px;
+    margin: 32px auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    min-height: 600px;
+}
+
+.chat-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 18px 20px;
+    border-bottom: 1px solid #eee;
+    font-size: 20px;
+    font-weight: 800;
+    color: #222;
+    background: linear-gradient(90deg, #f9f9f9 0%, #f1f1f1 100%);
+    border-radius: 16px 16px 0 0;
+    letter-spacing: -0.5px;
+    position: relative;
+}
+
+.chat-title-emoji {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: #fee500;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+    font-size: 20px;
+}
+
+.chat-title-text {
+    font-weight: 900;
+}
+
+.chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px 12px 12px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    background: #fff;
+}
+
+.msg-row {
+    display: flex;
+}
+
+.msg-bubble {
+    max-width: 70%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    word-break: break-word;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.msg-user {
+    justify-content: flex-end;
+}
+
+.msg-user .msg-bubble {
+    background: #fee500;
+    color: #222;
+    border-bottom-right-radius: 4px;
+}
+
+.msg-bot {
+    justify-content: flex-start;
+}
+
+.msg-bot .msg-bubble {
+    background: #f2f2f2;
+    color: #333;
+    border-bottom-left-radius: 4px;
+}
+
+.chat-footer {
+    display: flex;
+    gap: 8px;
+    padding: 16px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+    border-radius: 0 0 16px 16px;
+}
+
+.chat-footer textarea {
+    flex: 1;
+    resize: none;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    padding: 10px;
+    min-height: 38px;
+    max-height: 80px;
+    font-size: 15px;
+    font-family: inherit;
+}
+
+.chat-footer textarea:focus {
+    outline: none;
+    border-color: #fee500;
+}
+
+.chat-footer button {
+    background: #fee500;
+    border: none;
+    border-radius: 12px;
+    padding: 0 18px;
+    font-weight: bold;
+    color: #222;
+    cursor: pointer;
+    transition: background 0.2s;
+    font-size: 15px;
+}
+
+.chat-footer button:disabled {
+    background: #eee;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+.chat-footer button:hover:not(:disabled) {
+    filter: brightness(0.95);
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+    .chat-container {
+        max-width: 100vw;
+        height: 100vh;
+        border-radius: 0;
+        margin: 0;
+    }
+}
+
+/* Landing Page Styles */
+.landing-container {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e0f2fe 0%, #ddd6fe 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+.landing-title {
+    text-align: center;
+    margin-bottom: 48px;
+}
+
+.landing-title h1 {
+    font-size: 36px;
+    font-weight: 900;
+    background: linear-gradient(90deg, #2563eb 0%, #9333ea 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin: 16px 0;
+}
+
+.landing-title p {
+    font-size: 20px;
+    color: #666;
+    font-weight: 500;
+}
+
+.landing-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 32px;
+    width: 100%;
+    max-width: 800px;
+}
+
+.landing-card {
+    background: white;
+    padding: 40px;
+    border-radius: 24px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    border: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.landing-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.12);
+}
+
+.landing-card-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    position: relative;
+    z-index: 10;
+}
+
+.landing-card-icon {
+    padding: 16px;
+    border-radius: 16px;
+    transition: transform 0.3s ease;
+}
+
+.landing-card:hover .landing-card-icon {
+    transform: scale(1.1);
+}
+
+.landing-card h2 {
+    font-size: 24px;
+    font-weight: bold;
+    color: #222;
+    margin: 0;
+}
+
+.landing-card p {
+    color: #666;
+    text-align: center;
+    margin: 0;
+    line-height: 1.6;
+}
+
+/* Teacher Login Page Styles */
+.teacher-login-container {
+    min-height: 100vh;
+    background: #e5e5e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+}
+
+.teacher-login-box {
+    background: white;
+    padding: 40px;
+    border-radius: 16px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    max-width: 420px;
+    width: 100%;
+}
+
+.teacher-login-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.teacher-login-icon {
+    width: 64px;
+    height: 64px;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+.teacher-login-header h1 {
+    font-size: 24px;
+    font-weight: 900;
+    color: #222;
+    margin: 0 0 8px 0;
+}
+
+.teacher-login-header p {
+    color: #666;
+    margin: 0;
+}
+
+.teacher-login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.teacher-login-input-group {
+    margin-bottom: 20px;
+}
+
+.teacher-login-input-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    margin-bottom: 8px;
+}
+
+.teacher-login-input-group input {
+    width: 100%;
+    padding: 16px 20px;
+    border: 2px solid #3b82f6;
+    border-radius: 16px;
+    font-size: 16px;
+    font-family: inherit;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.teacher-login-input-group input:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+}
+
+.teacher-login-input-group input::placeholder {
+    color: #999;
+}
+
+.teacher-login-button {
+    width: 100%;
+    background: #e5e5e5;
+    color: #666;
+    padding: 16px;
+    border-radius: 16px;
+    font-weight: bold;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-top: 8px;
+}
+
+.teacher-login-button:hover {
+    background: #d4d4d4;
+    transform: translateY(-1px);
+}
+
+.teacher-login-button:active {
+    transform: translateY(0);
+}
+
+/* Teacher Dashboard Styles */
+.teacher-dashboard {
+    min-height: 100vh;
+    background: #e5e5e5;
+    display: flex;
+    font-family: 'Noto Sans KR', sans-serif;
+}
+
+.teacher-sidebar {
+    width: 260px;
+    background: white;
+    border-right: 1px solid #eee;
+    position: fixed;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+}
+
+.teacher-sidebar-header {
+    padding: 24px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.teacher-sidebar-logo {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.teacher-sidebar-title {
+    font-size: 20px;
+    font-weight: 900;
+    color: #222;
+}
+
+.teacher-sidebar-nav {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.teacher-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+}
+
+.teacher-nav-item:hover {
+    background: #f5f5f5;
+    color: #222;
+}
+
+.teacher-nav-item.active {
+    background: #eff6ff;
+    color: #2563eb;
+    font-weight: 700;
+}
+
+.teacher-sidebar-footer {
+    padding: 16px;
+    border-top: 1px solid #eee;
+}
+
+.teacher-profile {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+}
+
+.teacher-profile-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #fee500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    color: #222;
+}
+
+.teacher-profile-info {
+    flex: 1;
+}
+
+.teacher-profile-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #222;
+}
+
+.teacher-profile-school {
+    font-size: 12px;
+    color: #666;
+}
+
+.teacher-main {
+    flex: 1;
+    margin-left: 260px;
+    padding: 32px;
+}
+
+.teacher-content {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.teacher-page-header {
+    margin-bottom: 32px;
+}
+
+.teacher-page-title {
+    font-size: 28px;
+    font-weight: 900;
+    color: #222;
+    margin: 0 0 8px 0;
+}
+
+.teacher-page-subtitle {
+    font-size: 15px;
+    color: #666;
+    margin: 0;
+}
+
+.teacher-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    margin-bottom: 24px;
+}
+
+.teacher-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.teacher-card-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #222;
+    margin: 0;
+}
+
+.teacher-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.teacher-button-primary {
+    background: #2563eb;
+    color: white;
+}
+
+.teacher-button-primary:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+}
+
+.teacher-button-secondary {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.teacher-button-secondary:hover {
+    background: #e5e5e5;
+    color: #222;
+}
+
+.teacher-button-success {
+    background: #10b981;
+    color: white;
+}
+
+.teacher-button-success:hover {
+    background: #059669;
+}
+
+.teacher-button-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.teacher-button-danger:hover {
+    background: #dc2626;
+}
+
+.teacher-input {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+}
+
+.teacher-input:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+.teacher-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    font-family: inherit;
+    min-height: 120px;
+    resize: vertical;
+    transition: border-color 0.2s;
+}
+
+.teacher-textarea:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+.teacher-select {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    font-family: inherit;
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.teacher-select:focus {
+    outline: none;
+    border-color: #2563eb;
+}
+
+.teacher-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.teacher-table th {
+    text-align: left;
+    padding: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #666;
+    border-bottom: 2px solid #eee;
+}
+
+.teacher-table td {
+    padding: 12px;
+    font-size: 14px;
+    color: #222;
+    border-bottom: 1px solid #f5f5f5;
+}
+
+.teacher-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.teacher-badge-success {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.teacher-badge-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.teacher-badge-info {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+/* Student Interface Two-Column Layout */
+.student-layout {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 0;
+    height: 100vh;
+    background: #e5e5e5;
+}
+
+.student-left-panel {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    overflow: hidden;
+}
+
+.student-passage-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px;
+    border-bottom: 1px solid #eee;
+}
+
+.student-passage-title {
+    font-size: 18px;
+    font-weight: 900;
+    color: #222;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.student-passage-content {
+    font-size: 15px;
+    line-height: 1.8;
+    color: #333;
+}
+
+.student-passage-content .highlight {
+    background: #fee500;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.student-passage-content .english {
+    color: #1e40af;
+    font-style: italic;
+}
+
+.student-chat-area {
+    height: 400px;
+    display: flex;
+    flex-direction: column;
+    border-top: 2px solid #eee;
+}
+
+.student-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.student-chat-input-area {
+    padding: 16px;
+    border-top: 1px solid #eee;
+    background: #fafafa;
+}
+
+.student-chat-input-form {
+    display: flex;
+    gap: 8px;
+}
+
+.student-chat-input {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid #ddd;
+    font-size: 14px;
+    font-family: inherit;
+    resize: none;
+    min-height: 44px;
+    max-height: 120px;
+}
+
+.student-chat-input:focus {
+    outline: none;
+    border-color: #fee500;
+}
+
+.student-chat-send-button {
+    background: #fee500;
+    border: none;
+    border-radius: 12px;
+    padding: 0 20px;
+    font-weight: bold;
+    color: #222;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+}
+
+.student-chat-send-button:hover {
+    background: #ffd700;
+    transform: translateY(-1px);
+}
+
+.student-chat-send-button:disabled {
+    background: #eee;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+.student-right-panel {
+    background: #f5f5f5;
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100vh;
+}
+
+.student-selector-section {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.student-selector-title {
+    font-size: 13px;
+    font-weight: bold;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.student-selector-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.student-selector-button {
+    flex: 1;
+    padding: 8px;
+    border-radius: 10px;
+    border: 2px solid #ddd;
+    background: white;
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.student-selector-button:hover {
+    border-color: #fee500;
+    background: #fffbeb;
+}
+
+.student-selector-button.active {
+    border-color: #fee500;
+    background: #fee500;
+    color: #222;
+}
+
+.student-question-button {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    background: #fee500;
+    font-size: 14px;
+    font-weight: bold;
+    color: #222;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(254, 229, 0, 0.3);
+}
+
+.student-question-button:hover {
+    background: #ffd700;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(254, 229, 0, 0.4);
+}
+
+.faq-section {
+    background: white;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.faq-title {
+    font-size: 16px;
+    font-weight: 900;
+    color: #222;
+    margin-bottom: 12px;
+    text-align: center;
+}
+
+.faq-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.faq-button {
+    width: 100%;
+    padding: 14px 12px;
+    border-radius: 12px;
+    border: none;
+    background: #fef3c7;
+    font-size: 12px;
+    font-weight: 600;
+    color: #92400e;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    line-height: 1.5;
+}
+
+.faq-button:hover {
+    background: #fee500;
+    color: #222;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(254, 229, 0, 0.3);
+}
+
+/* Sentence Selection Modal */
+.sentence-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.sentence-modal {
+    background: white;
+    border-radius: 16px;
+    padding: 32px;
+    max-width: 700px;
+    width: 100%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.sentence-modal-header {
+    margin-bottom: 24px;
+}
+
+.sentence-modal-title {
+    font-size: 20px;
+    font-weight: 900;
+    color: #222;
+    margin-bottom: 8px;
+}
+
+.sentence-modal-subtitle {
+    font-size: 14px;
+    color: #666;
+}
+
+.sentence-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.sentence-item {
+    padding: 16px;
+    border-radius: 12px;
+    border: 2px solid #eee;
+    background: white;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    line-height: 1.6;
+    color: #333;
+}
+
+.sentence-item:hover {
+    border-color: #fee500;
+    background: #fffbeb;
+}
+
+.sentence-item.selected {
+    border-color: #fee500;
+    background: #fee500;
+    color: #222;
+    font-weight: 600;
+}
+
+.sentence-number {
+    display: inline-block;
+    background: #2563eb;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.sentence-modal-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+}
+
+.sentence-modal-button {
+    padding: 12px 24px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.sentence-modal-button-cancel {
+    background: #f5f5f5;
+    color: #666;
+}
+
+.sentence-modal-button-cancel:hover {
+    background: #e5e5e5;
+}
+
+.sentence-modal-button-confirm {
+    background: #fee500;
+    color: #222;
+}
+
+.sentence-modal-button-confirm:hover {
+    background: #ffd700;
+    transform: translateY(-1px);
+}
+
+.sentence-modal-button-confirm:disabled {
+    background: #eee;
+    color: #aaa;
+    cursor: not-allowed;
+}
+
+/* Teacher Dashboard Styles */
+.teacher-content-wrapper {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 32px;
+}
+
+.teacher-content-card {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    border: 1px solid #f0f0f0;
+    margin-bottom: 24px;
+}
+
+.teacher-section-header {
+    margin-bottom: 24px;
+}
+
+.teacher-section-title {
+    font-size: 24px;
+    font-weight: 900;
+    color: #222;
+    margin-bottom: 8px;
+}
+
+.teacher-section-subtitle {
+    font-size: 14px;
+    color: #666;
+}
+
+.teacher-input-group {
+    margin-bottom: 20px;
+}
+
+.teacher-input-label {
+    display: block;
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+    margin-bottom: 8px;
+}
+
+.teacher-input-field {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e5e5e5;
+    border-radius: 12px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+}
+
+.teacher-input-field:focus {
+    border-color: #3b82f6;
+}
+
+.teacher-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    border: 2px solid #e5e5e5;
+    border-radius: 12px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.6;
+}
+
+.teacher-textarea:focus {
+    border-color: #3b82f6;
+}
+
+.teacher-button-primary {
+    background: #3b82f6;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.teacher-button-primary:hover {
+    background: #2563eb;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.teacher-button-primary:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.teacher-button-secondary {
+    background: #f1f5f9;
+    color: #475569;
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: bold;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.teacher-button-secondary:hover {
+    background: #e2e8f0;
+}
+
+.teacher-button-danger {
+    background: #ef4444;
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 13px;
+}
+
+.teacher-button-danger:hover {
+    background: #dc2626;
+}
+
+.teacher-alert-info {
+    background: #dbeafe;
+    border: 1px solid #93c5fd;
+    color: #1e40af;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 8px;
+}
+
+.teacher-alert-warning {
+    background: #fef3c7;
+    border: 1px solid #fde047;
+    color: #92400e;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 8px;
+}
+
+.teacher-alert-success {
+    background: #d1fae5;
+    border: 1px solid #6ee7b7;
+    color: #065f46;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-top: 8px;
+}
+
+.teacher-empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+}
+
+.teacher-empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 16px;
+    opacity: 0.5;
+}
+
+.teacher-empty-state-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #6b7280;
+    margin-bottom: 8px;
+}
+
+.teacher-empty-state-subtitle {
+    font-size: 14px;
+    color: #9ca3af;
+}
+
+.teacher-room-card {
+    background: white;
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid #f0f0f0;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.teacher-room-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.teacher-room-code {
+    background: #d1fae5;
+    color: #065f46;
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 24px;
+    font-weight: 900;
+    font-family: 'Courier New', monospace;
+    letter-spacing: 2px;
+}
+
+.teacher-question-card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #f0f0f0;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+}
+
+.teacher-question-badge {
+    background: #dbeafe;
+    color: #1e40af;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.teacher-student-preview {
+    background: #f9fafb;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    padding: 16px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.teacher-student-row {
+    display: grid;
+    grid-template-columns: 40px 80px 60px 100px 80px;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e5e7eb;
+    align-items: center;
+    font-size: 13px;
+}
+
+.teacher-student-row:last-child {
+    border-bottom: none;
+}
+
+.teacher-student-header {
+    font-weight: bold;
+    color: #374151;
+    background: #f3f4f6;
+    border-radius: 8px;
+}
+
+.teacher-profile-email {
+    font-size: 13px;
+    color: #666;
+    font-weight: 500;
+}
+
+.teacher-grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.teacher-flex-end {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid #f0f0f0;
+}
+
+/* Modal Styles */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-header {
+    padding: 24px;
+    border-bottom: 2px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.modal-header h2 {
+    font-size: 20px;
+    font-weight: bold;
+    color: #222;
+    margin: 0;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #999;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+.modal-close:hover {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.modal-footer {
+    padding: 20px 24px;
+    border-top: 2px solid #f0f0f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
