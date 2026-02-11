@@ -311,8 +311,8 @@ export default function StudentChatInterface() {
     const handleQuestionConfirm = () => {
         if (tempQuestion) {
             setSelectedQuestion(tempQuestion);
-            // System message
-            setMessages(prev => [...prev, {
+            // Reset history for the new question
+            setMessages([{
                 role: 'assistant',
                 content: `"${tempQuestion.examCode}" 문항이 선택되었습니다.`
             }]);
