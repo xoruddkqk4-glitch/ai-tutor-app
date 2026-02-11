@@ -197,7 +197,6 @@ export default function StudentChatInterface() {
             setShowSentenceModal(true);
         } else {
             const questionText = FAQ_QUESTIONS[index];
-            const questionText = FAQ_QUESTIONS[index];
             const isGroupMsg = selectedStudents.length > 1;
             const contextString = `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}`;
 
