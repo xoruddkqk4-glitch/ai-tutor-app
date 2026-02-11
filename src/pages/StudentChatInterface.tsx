@@ -41,8 +41,10 @@ export default function StudentChatInterface() {
     const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
 
     // Chat State
+    // Chat State
+    type Message = { role: 'user' | 'assistant' | 'system'; content: string; isGroup?: boolean; context?: string };
     const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
-    const [messages, setMessages] = useState<{ role: 'user' | 'assistant', content: string; isGroup?: boolean }[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -142,7 +144,11 @@ export default function StudentChatInterface() {
         setInput('');
 
         const isGroupMsg = selectedStudents.length > 1;
-        setMessages(prev => [...prev, { role: 'user', content: userMessage, isGroup: isGroupMsg }]);
+
+        // Define context
+        const contextString = `[문항 정보]\n번호: ${selectedQuestion.examCode}\n주제: ${selectedQuestion.topic}\n지문: ${selectedQuestion.passage}`;
+
+        setMessages(prev => [...prev, { role: 'user', content: userMessage, isGroup: isGroupMsg, context: contextString }]);
         setIsLoading(true);
 
         if (!roomInfo?.api_key) {
@@ -154,7 +160,11 @@ export default function StudentChatInterface() {
         try {
             const apiMessages = [
                 { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
-                { role: 'user', content: `[문항 정보]\n번호: ${selectedQuestion.examCode}\n주제: ${selectedQuestion.topic}\n지문: ${selectedQuestion.passage}\n\n질문: ${userMessage}` }
+                ...messages.map(m => ({
+                    role: m.role,
+                    content: m.context ? `${m.context}\n\n${m.content}` : m.content
+                })),
+                { role: 'user', content: `${contextString}\n\n질문: ${userMessage}` }
             ];
 
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -187,9 +197,11 @@ export default function StudentChatInterface() {
             setShowSentenceModal(true);
         } else {
             const questionText = FAQ_QUESTIONS[index];
+            const questionText = FAQ_QUESTIONS[index];
             const isGroupMsg = selectedStudents.length > 1;
+            const contextString = `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}`;
 
-            setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg }]);
+            setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg, context: contextString }]);
             setIsLoading(true);
 
             if (!roomInfo?.api_key) return;
@@ -197,7 +209,11 @@ export default function StudentChatInterface() {
             try {
                 const apiMessages = [
                     { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
-                    { role: 'user', content: `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}\n\n질문: ${questionText}` }
+                    ...messages.map(m => ({
+                        role: m.role,
+                        content: m.context ? `${m.context}\n\n${m.content}` : m.content
+                    })),
+                    { role: 'user', content: `${contextString}\n\n질문: ${questionText}` }
                 ];
                 const response = await fetch('https://api.openai.com/v1/chat/completions', {
                     method: 'POST',
@@ -220,8 +236,9 @@ export default function StudentChatInterface() {
         const sentence = sentences[selectedSentenceIndex];
         const questionText = `구두점 기준으로 ${selectedSentenceIndex + 1}번째 영어 문장을 문법적으로 분석하고 문맥에 맞게 해석해줘: "${sentence}"`;
         const isGroupMsg = selectedStudents.length > 1;
+        const contextString = `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}`;
 
-        setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg }]);
+        setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg, context: contextString }]);
         setShowSentenceModal(false);
         setSelectedSentenceIndex(null);
         setIsLoading(true);
@@ -230,7 +247,11 @@ export default function StudentChatInterface() {
         try {
             const apiMessages = [
                 { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
-                { role: 'user', content: `[문항 정보]\n번호: ${selectedQuestion.examCode}\n지문: ${selectedQuestion.passage}\n\n요청: ${questionText}` }
+                ...messages.map(m => ({
+                    role: m.role,
+                    content: m.context ? `${m.context}\n\n${m.content}` : m.content
+                })),
+                { role: 'user', content: `${contextString}\n\n요청: ${questionText}` }
             ];
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
