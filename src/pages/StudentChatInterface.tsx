@@ -86,6 +86,12 @@ export default function StudentChatInterface() {
         e.preventDefault();
         if (!roomNumber.trim()) return;
 
+        // Validate room code (must be numeric)
+        if (!/^\d+$/.test(roomNumber.trim())) {
+            alert('방 코드는 숫자만 입력해주세요.');
+            return;
+        }
+
         setIsLoading(true);
         try {
             const data = await fetchRoomData(roomNumber.trim());
