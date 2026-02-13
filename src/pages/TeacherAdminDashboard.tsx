@@ -205,7 +205,7 @@ export default function TeacherAdminPage() {
                     class: parts[0],
                     number: parts[1],
                     name: parts[2],
-                    competency: parts[3] || '정보 없음'
+                    competency: parts[3] || '중'
                 };
             }
             return null;
@@ -913,13 +913,13 @@ export default function TeacherAdminPage() {
                                     <Upload size={20} style={{ color: '#3b82f6' }} /> 데이터 붙여넣기
                                 </h2>
                                 <div className="teacher-alert-info" style={{ marginBottom: '16px' }}>
-                                    <strong>형식:</strong> [학급] [번호] [이름] [역량]<br />
+                                    <strong>형식:</strong> [학급] [번호] [이름] [역량 (상/중/하)]<br />
                                     (엑셀에서 복사하면 자동으로 탭으로 구분됩니다)
                                 </div>
                                 <textarea
                                     className="teacher-textarea"
                                     rows={12}
-                                    placeholder={`예시:\n3학년 1반\t13번\t김철수\t상위권\n3학년 1반\t14번\t이영희\t어휘부족`}
+                                    placeholder={`예시:\n3학년 1반\t13번\t김철수\t상\n3학년 1반\t14번\t이영희\t중`}
                                     value={bulkStudentText}
                                     onChange={e => setBulkStudentText(e.target.value)}
                                     style={{ fontFamily: 'monospace', fontSize: '13px' }}
