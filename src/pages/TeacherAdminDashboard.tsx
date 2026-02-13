@@ -455,7 +455,7 @@ export default function TeacherAdminPage() {
                         <div className="teacher-login-icon">
                             <BookOpen style={{ color: 'white', width: '32px', height: '32px' }} />
                         </div>
-                        <h1>AI 챗봇 관리자</h1>
+                        <h1>AI Tutor 관리자</h1>
                         <p>선생님 계정으로 로그인하세요</p>
                     </div>
 
@@ -548,7 +548,7 @@ export default function TeacherAdminPage() {
                     <div className="teacher-sidebar-logo">
                         <BookOpen style={{ color: 'white', width: '20px', height: '20px' }} />
                     </div>
-                    <span className="teacher-sidebar-title">AI 챗봇</span>
+                    <span className="teacher-sidebar-title">AI Tutor</span>
                 </div>
 
                 <nav className="teacher-sidebar-nav">

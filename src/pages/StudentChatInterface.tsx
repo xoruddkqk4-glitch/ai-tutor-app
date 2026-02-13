@@ -337,18 +337,18 @@ export default function StudentChatInterface() {
                     onClick={() => window.location.href = '/'}
                     style={{
                         position: 'absolute', top: '20px', left: '20px',
-                        display: 'flex', alignItems: 'center', gap: '8px',
-                        background: 'rgba(255,255,255,0.2)', color: 'white',
-                        border: 'none', padding: '8px 16px', borderRadius: '12px',
-                        cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
-                        backdropFilter: 'blur(5px)'
+                        display: 'flex', alignItems: 'center', gap: '4px',
+                        background: 'rgba(255,255,255,0.9)', color: '#666',
+                        border: 'none', padding: '8px 12px', borderRadius: '999px',
+                        cursor: 'pointer', fontSize: '12px', fontWeight: 'bold',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
                     }}
                 >
                     <ArrowLeft size={18} /> 뒤로가기
                 </button>
                 <div style={{ background: 'white', padding: '40px', borderRadius: '24px', textAlign: 'center', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏫</div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>AI 챗봇 교실</h1>
+                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>AI Tutor 교실</h1>
                     <form onSubmit={handleRoomSubmit}>
                         <input
                             type="text"
@@ -387,7 +387,7 @@ export default function StudentChatInterface() {
                     </button>
 
                     <div className="sc-chat-title-header">
-                        <span>🏫 {roomInfo.class_name} (Code: {roomNumber})</span>
+                        <span>AI Tutor (Room Code: {roomNumber})</span>
                     </div>
 
                     <div className="sc-chat-desktop-area">

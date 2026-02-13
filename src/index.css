@@ -1416,6 +1416,7 @@ body {
     justify-content: flex-end;
     gap: 12px;
 }
+
 /* Student Chat Interface - Consolidated UI (Vanilla CSS) */
 .sc-container {
     display: flex;
@@ -1428,17 +1429,17 @@ body {
 .sc-header {
     background: white;
     padding: 16px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 .sc-header-row {
-     display: flex;
-     justify-content: space-between;
-     align-items: center;
-     margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
 }
 
 .sc-title {
@@ -1448,8 +1449,8 @@ body {
 }
 
 .sc-subtitle {
-     font-size: 12px;
-     color: #6b7280;
+    font-size: 12px;
+    color: #6b7280;
 }
 
 .sc-student-selector {
@@ -1570,7 +1571,7 @@ body {
     max-width: 80%;
     padding: 12px;
     border-radius: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     border: 1px solid;
     line-height: 1.6;
     word-break: break-word;
@@ -1601,7 +1602,7 @@ body {
     right: 0;
     background: white;
     border-top: 1px solid #e5e7eb;
-    box-shadow: 0 -4px 6px -1px rgba(0,0,0,0.1);
+    box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
     z-index: 20;
 }
 
@@ -1710,7 +1711,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background-color: rgba(0,0,0,0.6);
+    background-color: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
 }
 
@@ -1719,7 +1720,7 @@ body {
     width: 100%;
     max-width: 500px;
     border-radius: 16px;
-    box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
     overflow: hidden;
     margin: 16px;
     display: flex;
@@ -1760,12 +1761,12 @@ body {
 }
 
 .sc-modal-footer {
-     padding: 16px;
-     border-top: 1px solid #e5e7eb;
-     background-color: #f9fafb;
-     display: flex;
-     justify-content: flex-end;
-     gap: 8px;
+    padding: 16px;
+    border-top: 1px solid #e5e7eb;
+    background-color: #f9fafb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
 }
 
 .sc-modal-cancel-btn {
@@ -1842,7 +1843,7 @@ body {
 .sc-card {
     border-radius: 20px;
     padding: 20px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
     text-align: center;
 }
 
@@ -1927,28 +1928,49 @@ body {
     top: 20px;
     left: 20px;
     z-index: 50;
-    background: #4b5563;
-    color: white;
-    padding: 10px 20px;
-    border-radius: 30px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #666;
+    padding: 8px 12px;
+    border-radius: 999px;
     font-weight: bold;
+    font-size: 12px;
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
 }
 
 .sc-save-exit-btn:hover {
-    background: #374151;
+    background: rgba(255, 255, 255, 1);
+    transform: translateY(-1px);
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    body {
+        background: #111827;
+        color: #e5e5e5;
+    }
+
+    .sc-save-exit-btn {
+        background: rgba(31, 41, 55, 0.9);
+        color: #e5e5e5;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .sc-save-exit-btn:hover {
+        background: rgba(55, 65, 81, 1);
+    }
 }
 
 /* Chat Overrides for Desktop */
 .sc-chat-desktop-area {
     flex: 1;
     overflow-y: auto;
-    padding: 80px 40px 40px 40px; /* Top padding for Save btn */
+    padding: 80px 40px 40px 40px;
+    /* Top padding for Save btn */
 }
 
 .sc-input-desktop-area {
@@ -1974,11 +1996,13 @@ body {
 /* Student Interface - Final Scroll Adjustments */
 .sc-desktop-layout {
     display: grid;
-    grid-template-columns: 1fr 320px; /* Compact right panel */
+    grid-template-columns: 1fr 320px;
+    /* Compact right panel */
     height: 100vh;
     width: 100vw;
     background: #f8fafc;
-    overflow: hidden; /* Global scroll lock */
+    overflow: hidden;
+    /* Global scroll lock */
 }
 
 .sc-main-panel {
@@ -1998,7 +2022,8 @@ body {
     flex-direction: column;
     gap: 16px;
     height: 100%;
-    overflow: hidden; /* Force fixed right panel */
+    overflow: hidden;
+    /* Force fixed right panel */
 }
 
 .sc-chat-title-header {
@@ -2017,10 +2042,13 @@ body {
 }
 
 .sc-chat-desktop-area {
-    flex: 1; /* Takes remaining height */
-    overflow-y: auto; /* Independent scroll */
+    flex: 1;
+    /* Takes remaining height */
+    overflow-y: auto;
+    /* Independent scroll */
     padding: 20px 40px;
-    padding-top: 70px; /* Space for absolute Save button */
+    padding-top: 70px;
+    /* Space for absolute Save button */
     display: flex;
     flex-direction: column;
 }
@@ -2030,13 +2058,5 @@ body {
     padding: 20px;
     background: white;
     border-top: 1px solid #e5e7eb;
+    margin-bottom: 0;
 }
-
-.sc-save-exit-btn {
-    position: absolute;
-    top: 12px;
-    left: 20px;
-    z-index: 50;
-    /* ... existing styles ... */
-}
-

@@ -59,7 +59,7 @@ function App() {
     <div className="landing-container">
       <div className="landing-title">
         <div style={{ fontSize: '60px', marginBottom: '16px' }}>🏫</div>
-        <h1>AI 챗봇</h1>
+        <h1>AI Tutor</h1>
         <p>역할을 선택하여 계속하세요</p>
       </div>
 
@@ -87,6 +87,12 @@ function App() {
             </p>
           </div>
         </div>
+      </div>
+
+      <div style={{ marginTop: '40px', fontSize: '12px', textAlign: 'center' }}>
+        <a href="/privacy.html" target="_blank" rel="noopener noreferrer" style={{ color: '#9ca3af', textDecoration: 'none' }}>
+          개인정보처리방침
+        </a>
       </div>
     </div>
   );
