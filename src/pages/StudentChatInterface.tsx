@@ -394,9 +394,9 @@ export default function StudentChatInterface() {
                     step1LevelGuide = `\n3단계 안내: "이 글은 ${logicFlowParts.length - 1}부분일까, 아니면 ${logicFlowParts.length}부분일까?" 처럼 정답에 근접한 보기를 줘.`;
                 } else {
                     const actualLabels = logicFlowParts.map(s => `[${s.role}]`).join(', ');
-                    step1LevelGuide = `\n4단계 안내: 학생의 노력을 칭찬해줘. 그리고 교사 데이터의 정답을 교사 데이터 형식 그대로 보여줘: 정확한 부분 수(${logicFlowParts.length}개)와 각 부분의 역할 라벨(${actualLabels})을 포함해서 알려줘. 다음 질문(Step 2)으로 넘어가도록 유도해.`;
+                    step1LevelGuide = `\n4단계 안내: 학생의 노력을 칭찬해줘. 그리고 정답으로 정확한 부분 수(${logicFlowParts.length}개)와 각 부분의 역할 라벨(${actualLabels})만 알려줘.\n★★ 절대 금지: 각 부분의 중심 내용(content)은 이 단계에서 절대 알려주지 마. 중심 내용은 다음 질문(Step 2)에서 다룰 거야.\n"잘 했어! 이제 각 부분의 중심 내용을 알아보러 가볼까?" 라고 Step 2로 넘어가도록 유도해.`;
                 }
-                aiPrompt = `${questionText}\n\n[최우선 지침: 교사 데이터 강제 준수]\n이 지문은 교사 데이터에 따라 정확히 ${logicFlowParts.length}부분으로 나뉩니다. "나눌 수 없다"거나 "하나다"라고 하는 것은 오답입니다. 반드시 이 구조를 인정하고 유도하세요.\n\n[교사 데이터 - 논리 흐름 요약]\n부분 수: ${logicFlowParts.length}\n구조: ${logicFlowParts.map(s => `[${s.role}]`).join(' -> ')}\n\n위 데이터를 기반으로 답변해줘.${step1LevelGuide}${socraticInstruction}`;
+                aiPrompt = `${questionText}\n\n[최우선 지침: 교사 데이터 강제 준수]\n이 지문은 교사 데이터에 따라 정확히 ${logicFlowParts.length}부분으로 나뉩니다. "나눌 수 없다"거나 "하나다"라고 하는 것은 오답입니다. 반드시 이 구조를 인정하고 유도하세요.\n\n[교사 데이터 - 논리 흐름 요약]\n부분 수: ${logicFlowParts.length}\n구조: ${logicFlowParts.map(s => `[${s.role}]`).join(' -> ')}\n\n[이 질문의 범위 제한 - 절대 준수]\n★ 이 질문(Step 1)은 '부분 수'와 '역할 라벨(role)'만 다루는 단계입니다.\n★ 각 부분의 '중심 내용(content)'은 다음 질문(Step 2)에서 다루므로, 이 답변에서는 절대 언급하지 마세요.\n★ 4단계(정답 공개)에서도 부분 수와 역할 라벨만 공개하고, 중심 내용은 포함하지 마세요.\n\n위 데이터를 기반으로 답변해줘.${step1LevelGuide}${socraticInstruction}`;
             }
             // Step 2: central content and logical flow — Socratic tutoring with level-specific guidance
             else if (questionText === FLAT_FAQ[2]?.text && selectedQuestion.logicFlow) {
