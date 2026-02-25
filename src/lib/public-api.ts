@@ -7,9 +7,20 @@ export async function fetchRoomData(code: string) {
 
     if (error) throw error;
 
-    return data as {
-        room: any;
-        students: Student[];
-        questions: Question[];
+    // Map snake_case DB columns to camelCase TypeScript fields for questions
+    const rawQuestions: any[] = data?.questions || [];
+    const mappedQuestions: Question[] = rawQuestions.map((q: any) => ({
+        id: q.id,
+        examCode: q.exam_code || q.examCode || '',
+        targetGrade: q.target_grade || q.targetGrade || '',
+        topic: q.topic || '',
+        logicFlow: q.logic_flow ?? q.logicFlow ?? undefined,
+        passage: q.passage || '',
+    }));
+
+    return {
+        room: data?.room,
+        students: (data?.students || []) as Student[],
+        questions: mappedQuestions,
     };
 }
