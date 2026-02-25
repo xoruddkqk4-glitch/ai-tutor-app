@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Student, Question, Room, FeedbackTone, LogicFlowStep } from '../types';
+import type { Student, Question, LogicFlowStep } from '../types';
 
 import { fetchRoomData } from '../lib/public-api';
 import { Send, User, Bot, Users, ArrowLeft, CheckSquare, Square } from 'lucide-react';
