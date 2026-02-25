@@ -208,7 +208,10 @@ export default function StudentChatInterface() {
             ? `\n\n★ 교사 논리 흐름 데이터 (총 ${logicFlowParts.length}부분 - 이 부분 수가 유일한 정답) ★\n${logicFlowParts.map((step, i) => `부분 ${i + 1}: [${step.role || '역할미정'}] ${step.content}${step.conjunction ? ` (연결어: ${step.conjunction})` : ''}`).join('\n')}`
             : '';
         const topicInfo = q.topic ? `\n우리말 주제: ${q.topic}` : '';
-        return `[문항 정보]\n번호: ${q.examCode}\n지문: ${q.passage}${topicInfo}${logicFlowInfo}\n\n[구조 강조 지침]\n위의 '교사 논리 흐름 데이터'에 명시된 부분 수(${logicFlowParts.length}개)와 역할 라벨은 교사가 정한 유일한 정답 구조입니다. 학생에게는 직접 말하지 않되, 네 모든 가이드와 최종 정답 제시는 반드시 이 ${logicFlowParts.length}부분 구조를 기반으로 해야 합니다. 네 자체 분석으로 부분 수를 바꾸지 마세요.`;
+        const structureGuide = logicFlowParts.length > 0
+            ? `\n\n[구조 강조 지침]\n위의 '교사 논리 흐름 데이터'에 명시된 부분 수(${logicFlowParts.length}개)와 역할 라벨은 교사가 정한 유일한 정답 구조입니다. 학생에게는 직접 말하지 않되, 네 모든 가이드와 최종 정답 제시는 반드시 이 ${logicFlowParts.length}부분 구조를 기반으로 해야 합니다. 네 자체 분석으로 부분 수를 바꾸지 마세요.`
+            : '';
+        return `[문항 정보]\n번호: ${q.examCode}\n지문: ${q.passage}${topicInfo}${logicFlowInfo}${structureGuide}`;
     };
 
     const toggleClassGroup = (_className: string, studentsInClass: Student[]) => {
@@ -410,7 +413,7 @@ export default function StudentChatInterface() {
                 }
                 aiPrompt = `${questionText}\n\n[최우선 지침: 교사 데이터 강제 준수]\n부분 수(${logicFlowParts.length}개)와 역할 구조를 절대 변경하지 마세요. 자체 분석 금지.\n\n[교사 데이터 - 논리 흐름 디테일]\n${logicFlowParts.map((s, i) => `부분 ${i + 1}: [${s.role}] ${s.content}`).join('\n')}\n\n위 데이터를 기반으로 답변해줘.${step2LevelGuide}${socraticInstruction}`;
             }
-            // Step 3: logical flow summary (Role + Conjunction) - Direct
+            // Step 3: logical flow summary (Role + Conjunction) - Progressive Socratic tutoring
             else if (questionText === FLAT_FAQ[3]?.text && selectedQuestion.logicFlow) {
                 const logicRoleLabels = logicFlowParts.map(s => s.role || '역할미정');
                 const conjunctionList = logicFlowParts
@@ -418,7 +421,19 @@ export default function StudentChatInterface() {
                     .filter(c => c && c.trim())
                     .join(', ');
                 const structuredContent = logicFlowParts.map((s, i) => `부분 ${i + 1}(${s.role}): ${s.content}`).join('\n');
-                aiPrompt = `${questionText}\n\n[교사 데이터 - 요약 대상 (STRICT)]\n논리적 역할 순서: ${logicRoleLabels.join(' -> ')}\n사용된 주요 연결어: ${conjunctionList || '없음'}\n각 부분별 중심 내용:\n${structuredContent}\n\n위의 교사 데이터에 '완벽히' 기반하여 요약해줘. 네가 역할을 새로 정의하지 마.`;
+
+                let step3LevelGuide = '';
+                if (currentCount === 1) {
+                    step3LevelGuide = `\n\n[힌트 수준: 1단계 - 스스로 정리 유도]\n학생이 이전 Step에서 이미 논리 구조를 학습했어. 이제 "지금까지 파악한 내용을 바탕으로, 이 글의 논리적 흐름을 네가 직접 정리해볼 수 있을까?" 라고 유도해.\n★ 역할 라벨, 화살표 구조, 연결어 등은 절대 먼저 보여주지 마.\n★ 학생이 스스로 정리할 수 있도록 "각 부분이 어떻게 연결되어 있는지 생각해봐" 같은 열린 질문만 해.`;
+                } else if (currentCount === 2) {
+                    step3LevelGuide = `\n\n[힌트 수준: 2단계 - 구조 틀 제시]\n역할 라벨의 흐름을 화살표로 보여줘: ${logicRoleLabels.join(' → ')}\n★ 하지만 각 부분의 중심 내용은 아직 알려주지 마.\n★ "각 [역할]에 해당하는 중심 내용이 무엇인지 지문에서 찾아볼 수 있겠어?" 라고 유도해.\n★ 연결어도 아직 알려주지 마.`;
+                } else if (currentCount === 3) {
+                    step3LevelGuide = `\n\n[힌트 수준: 3단계 - 내용 포함, 연결어 유도]\n역할 라벨과 각 부분의 중심 내용을 함께 보여줘:\n${structuredContent}\n★ 하지만 연결어(영어 연결어)는 아직 직접 알려주지 마.\n★ "${conjunctionList ? '이 부분들을 연결하는 영어 연결어(예: however, therefore 등)가 지문에 있는지 찾아볼 수 있겠어?' : '각 부분이 어떤 관계로 연결되는지 생각해봐.'}" 라고 유도해.`;
+                } else {
+                    step3LevelGuide = `\n\n[힌트 수준: 4단계 - 완전한 정답 공개]\n학생의 노력을 진심으로 칭찬해줘. 그리고 교사 데이터의 정답을 완전한 형태로 보여줘:\n- 역할 라벨을 [ ] 안에 포함하고 화살표(→)로 흐름을 연결\n- 각 부분의 중심 내용 포함\n- 사용된 영어 연결어: ${conjunctionList || '없음'}\n\n교사 데이터:\n${structuredContent}\n\n위 정보를 시각적으로 명료하게 정리해줘. "잘 했어! 이제 논리적 흐름을 완전히 이해했네!" 라고 마무리해.`;
+                }
+
+                aiPrompt = `${questionText}\n\n[교사 데이터 - 요약 대상 (STRICT)]\n논리적 역할 순서: ${logicRoleLabels.join(' → ')}\n사용된 주요 연결어: ${conjunctionList || '없음'}\n각 부분별 중심 내용:\n${structuredContent}\n\n위의 교사 데이터에 '완벽히' 기반하여 답변해줘. 네가 역할을 새로 정의하지 마.${step3LevelGuide}${socraticInstruction}`;
             }
             // FAQ 4: Vocabulary - Direct
             else if (questionText === FLAT_FAQ[4]?.text) {

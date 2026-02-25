@@ -7,8 +7,16 @@ export async function fetchRoomData(code: string) {
 
     if (error) throw error;
 
-    // Map snake_case DB columns to camelCase TypeScript fields for questions
+    // ===== DEBUG: RPC 응답 원본 확인 =====
+    console.log('[DEBUG fetchRoomData] Raw RPC response:', JSON.stringify(data, null, 2));
     const rawQuestions: any[] = data?.questions || [];
+    if (rawQuestions.length > 0) {
+        console.log('[DEBUG fetchRoomData] First raw question keys:', Object.keys(rawQuestions[0]));
+        console.log('[DEBUG fetchRoomData] First raw question:', JSON.stringify(rawQuestions[0], null, 2));
+    }
+    // ===== END DEBUG =====
+
+    // Map snake_case DB columns to camelCase TypeScript fields for questions
     const mappedQuestions: Question[] = rawQuestions.map((q: any) => ({
         id: q.id,
         examCode: q.exam_code || q.examCode || '',
