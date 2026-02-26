@@ -430,7 +430,7 @@ export default function TeacherAdminPage() {
                 lineHeight: '1.2'
             }}>
                 Welcome Back,<br />
-                <span style={{ color: '#3b82f6' }}>AI Tutor Admin</span>
+                <span style={{ color: '#3b82f6' }}>AI Tutor</span>
             </h1>
             <p style={{
                 fontSize: '19px',
@@ -440,7 +440,7 @@ export default function TeacherAdminPage() {
                 marginBottom: '48px',
                 fontWeight: '400'
             }}>
-                선생님을 위한 지능형 학습 보조 솔루션, AI Tutor 관리자 페이지입니다.<br />
+                선생님을 위한 지능형 학습 보조 솔루션, AI Tutor 교사 페이지입니다.<br />
                 왼쪽 메뉴를 통해 학습 자료를 관리하고 실시간 대시보드를 확인하세요.
             </p>
             <div style={{
@@ -1503,9 +1503,19 @@ export default function TeacherAdminPage() {
                 {/* --- TAB: Settings --- */}
                 {activeTab === 'settings' && (
                     <div className="teacher-content-wrapper">
-                        <div className="teacher-section-header">
-                            <h1 className="teacher-section-title">설정</h1>
-                            <p className="teacher-section-subtitle">시스템 설정을 관리하세요.</p>
+                        <div className="teacher-section-header" style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '24px'
+                        }}>
+                            <div>
+                                <h1 className="teacher-section-title">설정</h1>
+                                <p className="teacher-section-subtitle">시스템 설정을 관리하세요.</p>
+                            </div>
+                            <button onClick={handleSaveSettings} className="teacher-button-primary">
+                                <Save size={18} /> 설정 저장
+                            </button>
                         </div>
 
 
@@ -1725,11 +1735,7 @@ export default function TeacherAdminPage() {
                             </div>
                         </div>
 
-                        <div className="teacher-flex-end">
-                            <button onClick={handleSaveSettings} className="teacher-button-primary">
-                                <Save size={18} /> 설정 저장
-                            </button>
-                        </div>
+
                     </div>
                 )}
 
