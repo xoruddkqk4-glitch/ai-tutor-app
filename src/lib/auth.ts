@@ -76,6 +76,24 @@ export async function signUp(email: string, password: string): Promise<AuthUser>
 }
 
 /**
+ * 새 비밀번호로 업데이트 (재설정 링크 클릭 후 호출)
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) throw error
+}
+
+/**
+ * 비밀번호 재설정 이메일 발송
+ */
+export async function resetPassword(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`
+    })
+    if (error) throw error
+}
+
+/**
  * 로그아웃
  */
 export async function signOut() {

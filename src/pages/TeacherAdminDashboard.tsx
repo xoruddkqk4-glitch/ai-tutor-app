@@ -4,7 +4,7 @@ import {
     Trash2, Upload, FileText, CheckCircle, Play, LogOut, Edit
 } from 'lucide-react';
 import type { Question, Room, LogicFlowStep } from '../types';
-import { signIn, signUp, signOut, getCurrentUser } from '../lib/auth';
+import { signIn, signUp, signOut, getCurrentUser, resetPassword } from '../lib/auth';
 import { getQuestions, createQuestion, updateQuestion, deleteQuestion } from '../lib/questions';
 import { getStudents, createStudents, type Student } from '../lib/students';
 import { getRooms, deleteRoom } from '../lib/rooms';
@@ -18,10 +18,12 @@ export default function TeacherAdminPage() {
     // --- State ---
     const [activeTab, setActiveTab] = useState<'welcome' | 'dashboard' | 'materials' | 'students' | 'settings'>('welcome');
     const [isLogin, setIsLogin] = useState(false);
-    const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+    const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot'>('login');
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
     const [teacherId, setTeacherId] = useState('');
+    const [forgotEmailSent, setForgotEmailSent] = useState(false);
+    const [loginQuestionLimit, setLoginQuestionLimit] = useState<number | null>(null);
 
     // Teacher Info
     const [teacherEmail, setTeacherEmail] = useState('');
@@ -66,6 +68,13 @@ export default function TeacherAdminPage() {
     const [teacherList, setTeacherList] = useState<TeacherRecord[]>([]);
 
     // --- Handlers ---
+
+    // 로그인 페이지용 문항 제한수 조회
+    useEffect(() => {
+        getAppConfig('limit_regular_questions').then(limit => {
+            if (limit) setLoginQuestionLimit(Number(limit));
+        }).catch(() => { });
+    }, []);
 
     // 세션 복원 (자동 로그인)
     useEffect(() => {
@@ -709,6 +718,17 @@ export default function TeacherAdminPage() {
         return 0;
     });
 
+    // --- 비밀번호 재설정 핸들러 ---
+    const handleForgotPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await resetPassword(loginEmail);
+            setForgotEmailSent(true);
+        } catch (error: any) {
+            alert('비밀번호 재설정 이메일 발송 실패: ' + (error.message || '이메일을 확인해주세요.'));
+        }
+    };
+
     // --- Login View ---
     if (!isLogin) {
         return (
@@ -718,84 +738,191 @@ export default function TeacherAdminPage() {
                         <div className="teacher-login-icon">
                             <BookOpen style={{ color: 'white', width: '32px', height: '32px' }} />
                         </div>
-                        <h1>AI Tutor 관리자</h1>
+                        <h1>AI Tutor 사용자</h1>
                         <p>선생님 계정으로 로그인하세요</p>
                     </div>
 
                     {/* 로그인/회원가입 탭 */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                        <button
-                            type="button"
-                            onClick={() => setAuthMode('login')}
-                            style={{
-                                flex: 1,
-                                padding: '12px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                background: authMode === 'login' ? '#3b82f6' : '#e5e7eb',
-                                color: authMode === 'login' ? 'white' : '#6b7280',
-                                fontWeight: authMode === 'login' ? '600' : '400',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            로그인
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setAuthMode('signup')}
-                            style={{
-                                flex: 1,
-                                padding: '12px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                background: authMode === 'signup' ? '#3b82f6' : '#e5e7eb',
-                                color: authMode === 'signup' ? 'white' : '#6b7280',
-                                fontWeight: authMode === 'signup' ? '600' : '400',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            회원가입
-                        </button>
-                    </div>
+                    {authMode !== 'forgot' && (
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setAuthMode('login')}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: authMode === 'login' ? '#3b82f6' : '#e5e7eb',
+                                    color: authMode === 'login' ? 'white' : '#6b7280',
+                                    fontWeight: authMode === 'login' ? '600' : '400',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                로그인
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAuthMode('signup')}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: authMode === 'signup' ? '#3b82f6' : '#e5e7eb',
+                                    color: authMode === 'signup' ? 'white' : '#6b7280',
+                                    fontWeight: authMode === 'signup' ? '600' : '400',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                회원가입
+                            </button>
+                        </div>
+                    )}
 
-                    <form onSubmit={authMode === 'login' ? handleLogin : handleSignup} className="teacher-login-form">
-                        <div className="teacher-login-input-group">
-                            <label>이메일</label>
-                            <input
-                                type="email"
-                                placeholder="teacher@school.com"
-                                value={loginEmail}
-                                onChange={(e) => setLoginEmail(e.target.value)}
-                                required
-                            />
+                    {/* 비밀번호 찾기 모드 */}
+                    {authMode === 'forgot' ? (
+                        <div style={{ textAlign: 'center' }}>
+                            {forgotEmailSent ? (
+                                <div style={{
+                                    padding: '24px',
+                                    background: '#f0fdf4',
+                                    borderRadius: '12px',
+                                    border: '1px solid #86efac',
+                                    marginBottom: '20px'
+                                }}>
+                                    <div style={{ fontSize: '36px', marginBottom: '12px' }}>📧</div>
+                                    <p style={{ color: '#166534', fontWeight: '600', marginBottom: '8px' }}>이메일이 발송되었습니다!</p>
+                                    <p style={{ color: '#15803d', fontSize: '14px' }}>{loginEmail}로 비밀번호 재설정 링크를 보냈습니다. 이메일함을 확인해주세요.</p>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleForgotPassword} className="teacher-login-form">
+                                    <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px', textAlign: 'left' }}>
+                                        가입하신 이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다.
+                                    </p>
+                                    <div className="teacher-login-input-group">
+                                        <label>이메일</label>
+                                        <input
+                                            type="email"
+                                            placeholder="teacher@school.com"
+                                            value={loginEmail}
+                                            onChange={(e) => setLoginEmail(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="teacher-login-button"
+                                        disabled={!loginEmail.trim()}
+                                        style={{
+                                            background: loginEmail.trim() ? '#3b82f6' : '#e5e7eb',
+                                            color: loginEmail.trim() ? 'white' : '#9ca3af',
+                                            opacity: loginEmail.trim() ? 1 : 0.6,
+                                            cursor: loginEmail.trim() ? 'pointer' : 'not-allowed',
+                                            transition: 'all 0.2s',
+                                            marginBottom: '12px'
+                                        }}
+                                    >
+                                        재설정 이메일 발송
+                                    </button>
+                                </form>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => { setAuthMode('login'); setForgotEmailSent(false); }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#6b7280',
+                                    fontSize: '14px',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline'
+                                }}
+                            >
+                                ← 로그인으로 돌아가기
+                            </button>
                         </div>
-                        <div className="teacher-login-input-group">
-                            <label>비밀번호</label>
-                            <input
-                                type="password"
-                                placeholder="••••••••"
-                                value={loginPassword}
-                                onChange={(e) => setLoginPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            className="teacher-login-button"
-                            disabled={!loginEmail.trim() || !loginPassword.trim()}
-                            style={{
-                                background: (loginEmail.trim() && loginPassword.trim()) ? '#3b82f6' : '#e5e7eb',
-                                color: (loginEmail.trim() && loginPassword.trim()) ? 'white' : '#9ca3af',
-                                opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.6,
-                                cursor: (loginEmail.trim() && loginPassword.trim()) ? 'pointer' : 'not-allowed',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {authMode === 'login' ? '로그인' : '회원가입'}
-                        </button>
-                    </form>
+                    ) : (
+                        <>
+                            <form onSubmit={authMode === 'login' ? handleLogin : handleSignup} className="teacher-login-form">
+                                <div className="teacher-login-input-group">
+                                    <label>이메일</label>
+                                    <input
+                                        type="email"
+                                        placeholder="teacher@school.com"
+                                        value={loginEmail}
+                                        onChange={(e) => setLoginEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="teacher-login-input-group">
+                                    <label>비밀번호</label>
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={loginPassword}
+                                        onChange={(e) => setLoginPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="teacher-login-button"
+                                    disabled={!loginEmail.trim() || !loginPassword.trim()}
+                                    style={{
+                                        background: (loginEmail.trim() && loginPassword.trim()) ? '#3b82f6' : '#e5e7eb',
+                                        color: (loginEmail.trim() && loginPassword.trim()) ? 'white' : '#9ca3af',
+                                        opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.6,
+                                        cursor: (loginEmail.trim() && loginPassword.trim()) ? 'pointer' : 'not-allowed',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {authMode === 'login' ? '로그인' : '회원가입'}
+                                </button>
+                            </form>
+                            {/* 비밀번호 찾기 링크 */}
+                            {authMode === 'login' && (
+                                <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setAuthMode('forgot'); setForgotEmailSent(false); }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#6b7280',
+                                            fontSize: '13px',
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        비밀번호를 잊으셨나요?
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* 안내 문구 */}
+                    <div style={{
+                        marginTop: '28px',
+                        padding: '16px 18px',
+                        background: '#f8fafc',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        fontSize: '13px',
+                        color: '#64748b',
+                        lineHeight: '1.8'
+                    }}>
+                        <p style={{ fontWeight: '600', color: '#475569', marginBottom: '8px' }}>📌 서비스 안내</p>
+                        <ol style={{ paddingLeft: '18px', margin: 0 }}>
+                            <li>회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.</li>
+                            <li>서버 관리 문제로 교사 1인당 최대 <strong style={{ color: '#3b82f6' }}>{loginQuestionLimit !== null ? loginQuestionLimit : '…'}문항</strong>까지 업로드하실 수 있습니다.</li>
+                            <li>서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.</li>
+                            <li>기타 문의사항은 <a href="mailto:ghinokr@gmail.com" style={{ color: '#3b82f6', textDecoration: 'none' }}>ghinokr@gmail.com</a>으로 이메일을 보내주시면 안내해 드리겠습니다.</li>
+                        </ol>
+                    </div>
                 </div>
             </div>
         );

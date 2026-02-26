@@ -8,10 +8,11 @@
 ### 👩‍🏫 선생님용 (Teacher Admin Dashboard)
 - **수업 관리**: 수업 방(Room)을 생성하고 관리하며, 접속 코드를 발급합니다.
 - **학생 관리**: 학생 명단을 개별 또는 일괄(엑셀 붙여넣기 방식)로 등록 및 관리합니다.
+- **계정 관리**: 별도의 승인 절차 없이 회원가입 즉시 이용 가능하며, 비밀번호 분실 시 이메일을 통한 **비밀번호 재설정(Forgot Password)** 기능을 제공합니다.
 - **학습 자료 관리**:
   - 기출 문제, 지문(Passage), 주제, 논리 흐름(Logic Flow) 등을 등록합니다.
   - 논리 흐름은 구조화된 JSONB 형식으로 저장됩니다 (역할 라벨, 중심 내용, **영어 연결어(conjunction)** 포함).
-  - 학년별, 난이도별 문항 관리가 가능합니다.
+  - 학년별, 난이도별 문항 관리가 가능하며, **교사 1인당 등록 가능한 문항 수 제한**을 실시간으로 안내합니다.
 - **설정 및 연동**:
   - OpenAI API Key 설정
   - System Prompt 커스터마이징
@@ -109,17 +110,17 @@
 src/
 ├── pages/
 │   ├── StudentChatInterface.tsx  # 학생용 채팅 화면 (4단계 힌트, Strict Mode, 어휘 누적 제외)
-│   ├── TeacherAdminDashboard.tsx # 선생님용 관리자 대시보드
+│   ├── TeacherAdminDashboard.tsx # 선생님용 관리자 대시보드 (로그인, 회원가입, 비밀번호 찾기 포함)
 │   └── RoomEditWindow.tsx        # 수업 방 생성/수정
 ├── lib/
-│   ├── auth.ts       # Supabase 인증 관련
+│   ├── auth.ts       # Supabase 인증 및 비밀번호 재설정/업데이트 기능
 │   ├── public-api.ts # Supabase RPC 데이터 조회 (snake_case → camelCase 매핑)
 │   ├── questions.ts  # 문항 관리 API
 │   ├── rooms.ts      # 수업 방 관리 API
 │   ├── students.ts   # 학생 관리 API
-│   └── settings.ts   # 설정 관리
+│   └── settings.ts   # 설정 및 앱 설정(문항 제한 등) 관리
 ├── types/            # TypeScript 타입 정의 (LogicFlowStep 등)
-├── App.tsx           # 메인 라우팅 및 렌더링
+├── App.tsx           # 메인 라우팅, 렌더링 및 비밀번호 재설정(Recovery) 처리
 └── index.css         # 전역 스타일 (사이드바 100vh, 다크모드 포함)
 public/
 └── privacy.html      # 개인정보처리방침 (HTML)
