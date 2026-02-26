@@ -2021,9 +2021,11 @@ body {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    height: 100%;
-    overflow: hidden;
-    /* Force fixed right panel */
+    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;
+    box-sizing: border-box;
+    /* Force fixed right panel, full viewport height */
 }
 
 .sc-chat-title-header {

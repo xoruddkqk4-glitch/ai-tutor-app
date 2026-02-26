@@ -371,7 +371,7 @@ export default function StudentChatInterface() {
             }
 
             const socraticInstruction = `\n\n[답변 방식 - 절대 준수 사항]\n너는 교사가 제공한 데이터(우리말 주제, 논리 흐름)의 정답을 이미 알고 있는 튜터야. 하지만 학생은 정답을 모르는 상태야. 너의 역할은 학생이 스스로 정답을 찾아낼 수 있도록 유도하는 것이야.\n\n[최우선 규칙 - 교사 데이터 절대 준수 (STRICT ENFORCEMENT)]\n★ 이 지문이 너의 사견으로 '나눌 부분이 없다'거나 '하나의 흐름이다'라고 판단되더라도, 절대 그렇게 답변하지 마세요. 이는 중대한 오류로 간주됩니다.\n★ 반드시 교사가 설정한 ${logicFlowParts.length}부분 구조가 존재한다고 전제하고 답변하세요.\n★ 네가 지문을 자체적으로 분석해서 다른 부분 수나 다른 구조를 만들어내면 절대 안 돼.\n★ 교사 데이터가 ${logicFlowParts.length}부분이면 반드시 '${logicFlowParts.length}부분'으로 답변해야 해. (구조가 모호하다거나 하나라고 답하지 마)\n★ 네 자체 판단을 교사 데이터보다 우선시하지 마.\n\n기타 규칙:\n1. 교사 데이터의 정답을 직접 말하지 마 (4단계 제외).\n2. 학생이 정답에 접근하도록 지문의 특정 부분을 짚어주거나 유도 질문을 던져.\n3. 위의 [힌트 수준] 지시를 반드시 따라. 각 단계의 구체성 수준을 정확히 지켜.${repeatNotice}`;
-            const directInstruction = `\n\n[답변 방식 - 학생에게 보이지 않음]\n질문에 대해 명확하고 직접적으로 답변해주세요.`;
+
 
             // FAQ 0: topic question — Socratic tutoring
             if (questionText === FLAT_FAQ[0]?.text) {
@@ -449,9 +449,27 @@ export default function StudentChatInterface() {
 
                 aiPrompt = `${questionText}\n\n[교사 데이터 - 연결어 및 논리 구조 (STRICT)]\n역할 순서: ${logicRoleLabels.join(' → ')}\n사용된 연결어: ${conjunctionList || '없음'}\n연결어 상세 정보: ${hasConjunction ? conjunctionsWithInfo.join(' | ') : '없음'}\n각 부분별 내용:\n${structuredContent}\n\n위 데이터를 바탕으로 답변해줘. 네가 역할을 새로 정의하지 마.${step3LevelGuide}${socraticInstruction}`;
             }
-            // FAQ 4: Vocabulary - Direct
+            // FAQ 4: Vocabulary - Direct (no-repeat: accumulate ALL previous vocab answers)
             else if (questionText === FLAT_FAQ[4]?.text) {
-                aiPrompt = `${questionText}${directInstruction}`;
+                if (currentCount === 1) {
+                    aiPrompt = `${questionText}\n\n[답변 방식]\n지문에서 중요한 영단어 5개를 뽑아 각 단어의 의미(뜻)와 함께 알려줘.`;
+                } else {
+                    // Collect ONLY AI responses that came immediately after a vocab question
+                    // This accurately captures all previous vocab rounds without missing any
+                    const vocabQuestion = FLAT_FAQ[4]?.text ?? '';
+                    const prevVocabAnswers: string[] = [];
+                    for (let i = 0; i < messages.length; i++) {
+                        if (messages[i].role === 'user' && messages[i].content === vocabQuestion) {
+                            if (i + 1 < messages.length && messages[i + 1].role === 'assistant') {
+                                prevVocabAnswers.push(messages[i + 1].content);
+                            }
+                        }
+                    }
+                    const allPrevVocab = prevVocabAnswers
+                        .map((ans, idx) => `[${idx + 1}회차 답변]\n${ans}`)
+                        .join('\n\n');
+                    aiPrompt = `${questionText}\n\n[중복 금지 - 최우선 준수]\n이 질문은 ${currentCount}번째 반복이야. 아래 이전 어휘 답변 목록에 등장한 모든 단어를 누적해서 절대 반복하지 말고, 지문에서 아직 다루지 않은 새로운 중요 단어 5개를 뽑아 의미와 함께 알려줘.\n\n[이전 어휘 답변 전체 누적 목록]\n${allPrevVocab}\n\n위의 모든 회차 답변에 등장한 단어는 빠짐없이 제외하고, 새 단어 5개만 선정해줘.`;
+                }
             }
 
             setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg, context: contextString, repeatCount: currentCount > 1 ? currentCount : undefined }]);
