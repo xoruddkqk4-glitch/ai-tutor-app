@@ -14,7 +14,7 @@ const FAQ_ITEMS: FAQItem[] = [
         items: [
             '이 글을 의미 기준으로 나눈다면 몇 부분으로 나눌 수 있어?',
             "의미 기준으로 나눠진 각 부분들의 중심 내용과 논리적 흐름을 정리해줄래?",
-            "이 글의 논리적 흐름을 정리해줘. 만약 지문에 '영어 연결어'가 있다면, 논리적 흐름에 맞는 '영어 연결어'를 답변에 포함시켜줘."
+            "이 지문에 사용된 '영어 연결어'를 찾아주고, 각 연결어의 논리적 역할을 설명해줘."
         ]
     },
     { type: 'single', text: '이 글에서 중요한 단어 5개만 뽑아서, 의미와 함께 알려줘.' },
@@ -413,27 +413,41 @@ export default function StudentChatInterface() {
                 }
                 aiPrompt = `${questionText}\n\n[최우선 지침: 교사 데이터 강제 준수]\n부분 수(${logicFlowParts.length}개)와 역할 구조를 절대 변경하지 마세요. 자체 분석 금지.\n\n[교사 데이터 - 논리 흐름 디테일]\n${logicFlowParts.map((s, i) => `부분 ${i + 1}: [${s.role}] ${s.content}`).join('\n')}\n\n위 데이터를 기반으로 답변해줘.${step2LevelGuide}${socraticInstruction}`;
             }
-            // Step 3: logical flow summary (Role + Conjunction) - Progressive Socratic tutoring
+            // Step 3: Conjunction finding and logical role explanation - Progressive Socratic tutoring
             else if (questionText === FLAT_FAQ[3]?.text && selectedQuestion.logicFlow) {
                 const logicRoleLabels = logicFlowParts.map(s => s.role || '역할미정');
+                const conjunctionsWithInfo = logicFlowParts
+                    .filter(s => s.conjunction && s.conjunction.trim())
+                    .map(s => `'${s.conjunction}' (역할: ${s.role}, 해당 내용: ${s.content})`);
                 const conjunctionList = logicFlowParts
                     .map(s => s.conjunction)
                     .filter(c => c && c.trim())
                     .join(', ');
-                const structuredContent = logicFlowParts.map((s, i) => `부분 ${i + 1}(${s.role}): ${s.content}`).join('\n');
+                const hasConjunction = conjunctionList.length > 0;
+                const structuredContent = logicFlowParts.map((s, i) => `부분 ${i + 1}(${s.role}): ${s.content}${s.conjunction ? ` [연결어: ${s.conjunction}]` : ''}`).join('\n');
+
+                const repConjunctions = `* 인과: because, since, therefore, thus, consequently 등\n* 역접·대조: however, nevertheless, whereas, although 등\n* 추가: moreover, furthermore, in addition 등\n* 예시: for example, for instance, such as 등\n* 순서·전개: first, second, finally, then, next 등\n* 강조·재진술: in fact, indeed, that is, in other words 등`;
 
                 let step3LevelGuide = '';
                 if (currentCount === 1) {
-                    step3LevelGuide = `\n\n[힌트 수준: 1단계 - 스스로 정리 유도]\n학생이 이전 Step에서 이미 논리 구조를 학습했어. 이제 "지금까지 파악한 내용을 바탕으로, 이 글의 논리적 흐름을 네가 직접 정리해볼 수 있을까?" 라고 유도해.\n★ 역할 라벨, 화살표 구조, 연결어 등은 절대 먼저 보여주지 마.\n★ 학생이 스스로 정리할 수 있도록 "각 부분이 어떻게 연결되어 있는지 생각해봐" 같은 열린 질문만 해.`;
+                    if (hasConjunction) {
+                        step3LevelGuide = `\n\n[힌트 수준: 1단계 - 연결어 위치 안내 및 역할 유도]\n★ 최우선 지시: 교사 데이터에 있는 연결어(${conjunctionList})가 지문의 어느 문장(또는 어느 위치)에 등장하는지 학생에게 먼저 친절하게 알려줘. 예: "지문의 두 번째 문장 시작 부분에 '${conjunctionList.split(', ')[0]}'이라는 단어가 있어." 처럼 구체적으로 짚어줘.\n그 다음, 아래 '대표적인 영어 연결어' 분류표를 학생에게 보여주면서, 이 연결어가 어떤 논리적 역할(인과? 역접? 등)을 하는지 스스로 생각해보게 질문해.\n\n[대표적인 영어 연결어]\n${repConjunctions}\n\n★ 연결어의 논리적 역할(정답)은 아직 직접 말하지 마. 위치만 알려주고 역할은 학생이 추론하게 해.`;
+                    } else {
+                        step3LevelGuide = `\n\n[힌트 수준: 1단계 - 연결어 부재 시 숨은 논리 탐색 유도]\n이 지문에는 교사 데이터 기준 명시적인 영어 연결어가 없어. 학생에게 이 사실을 알려주고, "영어 연결어가 없더라도, 문장과 문장 사이에 '숨은 논리 관계'가 있을 수 있어. 각 부분의 내용을 읽어보면서, 서로 어떤 논리적 관계(예: 인과, 예시, 역접 등)인지 생각해볼 수 있을까?" 라고 유도해.\n아래 분류를 참고로 학생에게 제공해줘.\n\n[대표적인 논리적 연결 관계]\n${repConjunctions}`;
+                    }
                 } else if (currentCount === 2) {
-                    step3LevelGuide = `\n\n[힌트 수준: 2단계 - 구조 틀 제시]\n역할 라벨의 흐름을 화살표로 보여줘: ${logicRoleLabels.join(' → ')}\n★ 하지만 각 부분의 중심 내용은 아직 알려주지 마.\n★ "각 [역할]에 해당하는 중심 내용이 무엇인지 지문에서 찾아볼 수 있겠어?" 라고 유도해.\n★ 연결어도 아직 알려주지 마.`;
+                    if (hasConjunction) {
+                        step3LevelGuide = `\n\n[힌트 수준: 2단계 - 역할 추론 범위 축소]\n연결어 '${conjunctionList}'의 앞뒤 문맥을 다시 한번 짚어주면서, "이 연결어 앞의 내용과 뒷 내용을 비교해보면, 서로 반대되는 이야기일까, 아니면 원인과 결과 관계일까?" 처럼 두 가지 정도의 구체적인 보기를 제시하며 역할을 좁혀가도록 유도해.`;
+                    } else {
+                        step3LevelGuide = `\n\n[힌트 수준: 2단계 - 숨은 논리 추론 범위 축소]\n"이전 부분에서 말한 내용과 다음 부분에서 말한 내용을 비교해보면, 서로 대조/반전되는 이야기일까, 아니면 앞 내용을 뒷받침하는 구체적인 예시일까?" 처럼 두 가지 정도의 구체적인 보기를 제시하며 유도해.`;
+                    }
                 } else if (currentCount === 3) {
-                    step3LevelGuide = `\n\n[힌트 수준: 3단계 - 내용 포함, 연결어 유도]\n역할 라벨과 각 부분의 중심 내용을 함께 보여줘:\n${structuredContent}\n★ 하지만 연결어(영어 연결어)는 아직 직접 알려주지 마.\n★ "${conjunctionList ? '이 부분들을 연결하는 영어 연결어(예: however, therefore 등)가 지문에 있는지 찾아볼 수 있겠어?' : '각 부분이 어떤 관계로 연결되는지 생각해봐.'}" 라고 유도해.`;
+                    step3LevelGuide = `\n\n[힌트 수준: 3단계 - 거의 정답 수준 단서 제공]\n교사 데이터의 역할 라벨(${logicRoleLabels.join(', ')})을 일부 공개하면서, "이 연결어(또는 논리적 흐름)는 '${logicRoleLabels.length > 1 ? logicRoleLabels[1] : logicRoleLabels[0]}' 역할을 하는 것 같은데, 어떻게 생각해?" 라고 정답에 거의 가깝게 유도해.`;
                 } else {
-                    step3LevelGuide = `\n\n[힌트 수준: 4단계 - 완전한 정답 공개]\n학생의 노력을 진심으로 칭찬해줘. 그리고 교사 데이터의 정답을 완전한 형태로 보여줘:\n- 역할 라벨을 [ ] 안에 포함하고 화살표(→)로 흐름을 연결\n- 각 부분의 중심 내용 포함\n- 사용된 영어 연결어: ${conjunctionList || '없음'}\n\n교사 데이터:\n${structuredContent}\n\n위 정보를 시각적으로 명료하게 정리해줘. "잘 했어! 이제 논리적 흐름을 완전히 이해했네!" 라고 마무리해.`;
+                    step3LevelGuide = `\n\n[힌트 수준: 4단계 - 완전한 정답 공개]\n학생의 노력을 진심으로 칭찬해줘. 그리고 교사 데이터에 따른 정확한 연결어 정보와 논리적 역할을 완전히 공개해.\n\n[정답 요약]\n- 사용된 연결어: ${conjunctionList || '없음'}\n- 각 연결어의 논리적 역할:\n${structuredContent}\n\n위 정보를 명료하게 정리해줘. "잘 했어! 완벽하게 이해했네!" 라고 마무리해.`;
                 }
 
-                aiPrompt = `${questionText}\n\n[교사 데이터 - 요약 대상 (STRICT)]\n논리적 역할 순서: ${logicRoleLabels.join(' → ')}\n사용된 주요 연결어: ${conjunctionList || '없음'}\n각 부분별 중심 내용:\n${structuredContent}\n\n위의 교사 데이터에 '완벽히' 기반하여 답변해줘. 네가 역할을 새로 정의하지 마.${step3LevelGuide}${socraticInstruction}`;
+                aiPrompt = `${questionText}\n\n[교사 데이터 - 연결어 및 논리 구조 (STRICT)]\n역할 순서: ${logicRoleLabels.join(' → ')}\n사용된 연결어: ${conjunctionList || '없음'}\n연결어 상세 정보: ${hasConjunction ? conjunctionsWithInfo.join(' | ') : '없음'}\n각 부분별 내용:\n${structuredContent}\n\n위 데이터를 바탕으로 답변해줘. 네가 역할을 새로 정의하지 마.${step3LevelGuide}${socraticInstruction}`;
             }
             // FAQ 4: Vocabulary - Direct
             else if (questionText === FLAT_FAQ[4]?.text) {
