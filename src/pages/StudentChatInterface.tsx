@@ -122,7 +122,6 @@ export default function StudentChatInterface() {
         setIsLoading(true);
         try {
             const data = await fetchRoomData(roomNumber.trim());
-            console.log('Room Data:', data);
 
             if (!data.room) throw new Error('방 정보를 찾을 수 없습니다.');
 
@@ -341,15 +340,6 @@ export default function StudentChatInterface() {
             const logicFlowParts = safeParseLogicFlow(selectedQuestion.logicFlow);
             const contextString = getContextString(selectedQuestion);
 
-            // ===== DEBUG: 데이터베이스에서 가져온 데이터 확인 =====
-            console.log('===== [DEBUG] FAQ 클릭 디버깅 =====');
-            console.log('[DEBUG] 선택된 문항 ID:', selectedQuestion.id);
-            console.log('[DEBUG] 원본 logicFlow (DB에서 가져온 raw 데이터):', selectedQuestion.logicFlow);
-            console.log('[DEBUG] logicFlow 타입:', typeof selectedQuestion.logicFlow);
-            console.log('[DEBUG] 파싱된 logicFlowParts:', JSON.stringify(logicFlowParts, null, 2));
-            console.log('[DEBUG] 파싱된 부분 수:', logicFlowParts.length);
-            console.log('[DEBUG] contextString:', contextString);
-            console.log('===== [DEBUG] END =====');
 
             // Build the actual prompt sent to AI (may differ from displayed text)
             let aiPrompt = questionText;

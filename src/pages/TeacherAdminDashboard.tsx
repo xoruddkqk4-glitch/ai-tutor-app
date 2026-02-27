@@ -79,7 +79,6 @@ export default function TeacherAdminPage() {
         console.log('[loadLoginConfig] Fetching fresh config for login page...');
         try {
             const limit = await getAppConfig('limit_regular_questions');
-            console.log('[loadLoginConfig] limit_regular_questions:', limit);
             if (limit) {
                 setLoginQuestionLimit(Number(limit));
             } else {
@@ -87,7 +86,6 @@ export default function TeacherAdminPage() {
             }
 
             const notice = await getAppConfig('login_notice_text');
-            console.log('[loadLoginConfig] login_notice_text:', notice ? 'Found' : 'Not found (using default)');
             if (notice) {
                 setLoginNotice(notice);
                 setLoginNoticeText(notice); // 에디터용 데이터도 동기화
@@ -109,7 +107,6 @@ export default function TeacherAdminPage() {
     useEffect(() => {
         getCurrentUser().then(user => {
             if (user) {
-                console.log('[SessionRestore] User found:', user.email);
                 setTeacherId(user.id);
                 setTeacherEmail(user.email);
                 setTeacherRole(user.role);

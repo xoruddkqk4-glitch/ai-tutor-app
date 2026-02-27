@@ -20,7 +20,6 @@ export async function getTeacherSettings(teacherId: string): Promise<TeacherSett
         throw error;
     }
 
-    console.log('Fetched settings data:', data);
     return {
         openai_api_key: data.openai_api_key,
         system_prompt: data.system_prompt,
@@ -30,7 +29,7 @@ export async function getTeacherSettings(teacherId: string): Promise<TeacherSett
 }
 
 export async function updateTeacherSettings(teacherId: string, settings: Partial<TeacherSettings>): Promise<void> {
-    console.log('Updating settings for ID:', teacherId, 'with:', settings);
+    console.log('Updating settings for ID:', teacherId);
     const { error } = await supabase
         .from('teachers')
         .update(settings)
@@ -92,7 +91,6 @@ export async function getAllTeachers(): Promise<TeacherRecord[]> {
         console.error('getAllTeachers error:', error);
         throw error;
     }
-    console.log('getAllTeachers data:', data);
     return (data || []).map(t => ({
         id: t.id,
         email: t.email,
