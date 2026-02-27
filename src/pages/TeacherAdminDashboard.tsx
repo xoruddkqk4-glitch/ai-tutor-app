@@ -74,25 +74,42 @@ export default function TeacherAdminPage() {
 
     // --- Handlers ---
 
-    // 로그인 페이지용 문항 제한수 및 안내문구 조회
-    useEffect(() => {
-        getAppConfig('limit_regular_questions').then(limit => {
-            if (limit) setLoginQuestionLimit(Number(limit));
-        }).catch(() => { });
+    // 로그인 페이지용 문항 제한수 및 안내문구 조회 (항상 최신 데이터를 가져오도록 함수화)
+    const loadLoginConfig = async () => {
+        console.log('[loadLoginConfig] Fetching fresh config for login page...');
+        try {
+            const limit = await getAppConfig('limit_regular_questions');
+            console.log('[loadLoginConfig] limit_regular_questions:', limit);
+            if (limit) {
+                setLoginQuestionLimit(Number(limit));
+            } else {
+                setLoginQuestionLimit(50); // 기본값 설정
+            }
 
-        getAppConfig('login_notice_text').then(notice => {
+            const notice = await getAppConfig('login_notice_text');
+            console.log('[loadLoginConfig] login_notice_text:', notice ? 'Found' : 'Not found (using default)');
             if (notice) {
                 setLoginNotice(notice);
+                setLoginNoticeText(notice); // 에디터용 데이터도 동기화
             } else {
-                setLoginNotice(`회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.\n서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.\n서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.\n기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`);
+                const defaultNotice = `회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.\n서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.\n서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.\n기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`;
+                setLoginNotice(defaultNotice);
+                setLoginNoticeText(defaultNotice);
             }
-        }).catch(() => { });
-    }, []);
+        } catch (error) {
+            console.error('[loadLoginConfig] Error fetching config:', error);
+        }
+    };
+
+    useEffect(() => {
+        loadLoginConfig();
+    }, [isLogin]);
 
     // 세션 복원 (자동 로그인)
     useEffect(() => {
         getCurrentUser().then(user => {
             if (user) {
+                console.log('[SessionRestore] User found:', user.email);
                 setTeacherId(user.id);
                 setTeacherEmail(user.email);
                 setTeacherRole(user.role);
@@ -104,6 +121,8 @@ export default function TeacherAdminPage() {
                 loadRooms();
                 loadSettings(user.id);
                 loadAppConfig();
+            } else {
+                console.log('[SessionRestore] No user found');
             }
         }).catch(err => {
             console.error('세션 복원 실패:', err);
