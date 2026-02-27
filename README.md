@@ -14,9 +14,10 @@
   - 논리 흐름은 구조화된 JSONB 형식으로 저장됩니다 (역할 라벨, 중심 내용, **영어 연결어(conjunction)** 포함).
   - 학년별, 난이도별 문항 관리가 가능하며, **교사 1인당 등록 가능한 문항 수 제한**을 실시간으로 안내합니다.
 - **설정 및 연동**:
-  - OpenAI API Key 설정
+  - OpenAI API Key 설정 (필수)
   - System Prompt 커스터마이징
-  - Google Drive 연동 (Google Apps Script URL)을 통해 학생들의 대화 내역을 자동 저장
+  - 기능 안내: 로그인 페이지 안내 문구 편집 기능 (마스터 교사 전용, {limit} 자동 치환)
+  - Google Drive 연동 (Google Apps Script URL)을 통해 학생들의 대화 내역 자동 저장 (현재 마스터 교사만 사용 가능, 일반 교사는 추후 지원 예정)
 
 ### 👨‍🎓 학생용 (Student Chat Interface)
 - **간편 접속**: 선생님이 공유한 Room Code로 수업에 입장합니다.

@@ -24,6 +24,7 @@ export default function TeacherAdminPage() {
     const [teacherId, setTeacherId] = useState('');
     const [forgotEmailSent, setForgotEmailSent] = useState(false);
     const [loginQuestionLimit, setLoginQuestionLimit] = useState<number | null>(null);
+    const [loginNotice, setLoginNotice] = useState<string>('');
 
     // Teacher Info
     const [teacherEmail, setTeacherEmail] = useState('');
@@ -50,6 +51,10 @@ export default function TeacherAdminPage() {
     const [googleScriptUrl, setGoogleScriptUrl] = useState('');
     const [maxQuestionsLimit, setMaxQuestionsLimit] = useState(50);
     const [limitInput, setLimitInput] = useState('50');
+    const [loginNoticeText, setLoginNoticeText] = useState(`회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.
+서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.
+서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.
+기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`);
     // Bridge for existing code compatibility
     const maxQuestionsForRegular = maxQuestionsLimit;
 
@@ -69,10 +74,18 @@ export default function TeacherAdminPage() {
 
     // --- Handlers ---
 
-    // 로그인 페이지용 문항 제한수 조회
+    // 로그인 페이지용 문항 제한수 및 안내문구 조회
     useEffect(() => {
         getAppConfig('limit_regular_questions').then(limit => {
             if (limit) setLoginQuestionLimit(Number(limit));
+        }).catch(() => { });
+
+        getAppConfig('login_notice_text').then(notice => {
+            if (notice) {
+                setLoginNotice(notice);
+            } else {
+                setLoginNotice(`회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.\n서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.\n서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.\n기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`);
+            }
         }).catch(() => { });
     }, []);
 
@@ -236,6 +249,10 @@ export default function TeacherAdminPage() {
         if (limit) {
             setMaxQuestionsLimit(Number(limit));
             setLimitInput(limit);
+        }
+        const notice = await getAppConfig('login_notice_text');
+        if (notice) {
+            setLoginNoticeText(notice);
         }
     };
 
@@ -694,6 +711,7 @@ export default function TeacherAdminPage() {
             // 2. Global Config (Master Only)
             if (teacherRole === 'master') {
                 await updateAppConfig('limit_regular_questions', limitInput);
+                await updateAppConfig('login_notice_text', loginNoticeText);
                 setMaxQuestionsLimit(Number(limitInput));
             }
 
@@ -917,10 +935,39 @@ export default function TeacherAdminPage() {
                     }}>
                         <p style={{ fontWeight: '600', color: '#475569', marginBottom: '8px' }}>📌 서비스 안내</p>
                         <ol style={{ paddingLeft: '18px', margin: 0 }}>
-                            <li>회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.</li>
-                            <li>서버 관리 문제로 교사 1인당 최대 <strong style={{ color: '#3b82f6' }}>{loginQuestionLimit !== null ? loginQuestionLimit : '…'}문항</strong>까지 업로드하실 수 있습니다.</li>
-                            <li>서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.</li>
-                            <li>기타 문의사항은 <a href="mailto:ghinokr@gmail.com" style={{ color: '#3b82f6', textDecoration: 'none' }}>ghinokr@gmail.com</a>으로 이메일을 보내주시면 안내해 드리겠습니다.</li>
+                            {loginNotice.split('\n').filter(line => line.trim() !== '').map((line, idx) => {
+                                const limitParts = line.split('{limit}');
+                                return (
+                                    <li key={idx} style={{ marginBottom: '4px' }}>
+                                        {limitParts.map((limitPart, lIdx) => {
+                                            const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/g;
+                                            const emailParts = limitPart.split(emailRegex);
+
+                                            const renderedPart = emailParts.map((part, eIdx) => {
+                                                if (part.match(emailRegex)) {
+                                                    return (
+                                                        <a key={`email-${eIdx}`} href={`mailto:${part}`} style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                                                            {part}
+                                                        </a>
+                                                    );
+                                                }
+                                                return part;
+                                            });
+
+                                            return (
+                                                <React.Fragment key={`limit-${lIdx}`}>
+                                                    {renderedPart}
+                                                    {lIdx < limitParts.length - 1 && (
+                                                        <strong style={{ color: '#3b82f6' }}>
+                                                            {loginQuestionLimit !== null ? loginQuestionLimit : '…'}
+                                                        </strong>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </li>
+                                );
+                            })}
                         </ol>
                     </div>
                 </div>
@@ -1539,6 +1586,23 @@ export default function TeacherAdminPage() {
                                             모든 일반 교사에게 적용되는 문항 등록 최대 개수입니다.
                                         </div>
                                     </div>
+
+                                    <div className="teacher-input-group" style={{ marginTop: '20px' }}>
+                                        <label className="teacher-input-label">로그인 페이지 안내 문구</label>
+                                        <textarea
+                                            className="teacher-textarea"
+                                            rows={5}
+                                            value={loginNoticeText}
+                                            onChange={e => setLoginNoticeText(e.target.value)}
+                                            placeholder="안내 문구를 입력하세요. {limit}를 입력하면 '일반 교사 문항 등록 제한 수'로 자동 변환됩니다."
+                                            style={{ lineHeight: '1.6' }}
+                                        />
+                                        <div className="teacher-alert-info" style={{ marginTop: '8px' }}>
+                                            줄바꿈(Enter) 시 번호 매기기 목록(1, 2, 3...)으로 표시됩니다.
+                                            <br />문구 내에 <strong>{`{limit}`}</strong>를 입력하면 위의 '문항 등록 제한 수' 값으로 자동 치환됩니다.
+                                            <br />이메일 주소를 입력하면 자동으로 이메일 보내기 링크가 생성됩니다.
+                                        </div>
+                                    </div>
                                 </div>
 
                                 {/* Teacher Management Table */}
@@ -1664,7 +1728,7 @@ export default function TeacherAdminPage() {
                         {/* API Key */}
                         <div className="teacher-content-card">
                             <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                🔑 OpenAI API 키
+                                🔑 OpenAI API 키 (필수 사항)
                             </h3>
                             <div className="teacher-input-group">
                                 <label className="teacher-input-label">API 키</label>
@@ -1682,9 +1746,12 @@ export default function TeacherAdminPage() {
                         </div>
 
                         {/* Google Drive Integration */}
-                        <div className="teacher-content-card">
-                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                📁 구글 드라이브 연동 (선택 사항)
+                        <div className="teacher-content-card" style={{ opacity: teacherRole === 'master' ? 1 : 0.6 }}>
+                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>📁 구글 드라이브 연동 (선택 사항)</span>
+                                {teacherRole !== 'master' && (
+                                    <span style={{ fontSize: '12px', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', fontWeight: 'normal' }}>준비 중</span>
+                                )}
                             </h3>
 
                             <div className="teacher-input-group">
@@ -1695,9 +1762,11 @@ export default function TeacherAdminPage() {
                                     placeholder="https://script.google.com/macros/s/.../exec"
                                     value={googleScriptUrl}
                                     onChange={e => setGoogleScriptUrl(e.target.value)}
+                                    disabled={teacherRole !== 'master'}
+                                    style={{ cursor: teacherRole !== 'master' ? 'not-allowed' : 'text', background: teacherRole !== 'master' ? '#f1f5f9' : 'white' }}
                                 />
                                 <div className="teacher-alert-info">
-                                    대화 내용을 구글 드라이브에 저장하려면, 배포된 Apps Script의 웹 앱 URL을 입력하세요.
+                                    대화 내용을 구글 드라이브에 저장하려면, 본인 구글 계정으로 Apps Script를 생성하고 웹 앱으로 배포한 URL을 입력하세요.
                                 </div>
                             </div>
 
@@ -1709,11 +1778,19 @@ export default function TeacherAdminPage() {
                                     placeholder="1AbC2DeF3GhI4JkL5MnO6PqR7StU8VwX9YzA"
                                     value={driveFolderId}
                                     onChange={e => setDriveFolderId(e.target.value)}
+                                    disabled={teacherRole !== 'master'}
+                                    style={{ cursor: teacherRole !== 'master' ? 'not-allowed' : 'text', background: teacherRole !== 'master' ? '#f1f5f9' : 'white' }}
                                 />
                                 <div className="teacher-alert-info">
                                     대화 내용이 저장될 폴더의 ID입니다. (URL의 folders/ 뒷부분)
                                 </div>
                             </div>
+
+                            {teacherRole !== 'master' && (
+                                <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
+                                    💡 일반 교사분들을 위한 <strong>구글 드라이브 간편 연동 기능</strong>이 곧 지원될 예정입니다.
+                                </div>
+                            )}
                         </div>
 
                         {/* System Prompt */}
