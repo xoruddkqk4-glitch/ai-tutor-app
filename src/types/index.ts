@@ -13,12 +13,20 @@ export type ClassInfo = {
   studentCount: number;
 };
 
+export type LogicFlowStep = {
+  role: string;
+  conjunction?: string;
+  content: string;
+};
+
 export type Question = {
   id: number;
-  examCode: string; // UI: 문항 번호 (DB: exam_code)
-  targetGrade?: string; // UI: 출처 (DB: target_grade)
+  /** UI: 문항 번호 */
+  examCode: string;
+  /** UI: 출처 (DB 필드명은 기존 유지) */
+  targetGrade?: string;
   topic: string;
-  logicFlow?: string;
+  logicFlow?: string | string[] | LogicFlowStep[];
   passage: string;
 };
 

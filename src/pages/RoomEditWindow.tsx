@@ -170,7 +170,7 @@ export default function RoomEditWindow() {
                                     {q.topic}
                                 </div>
                                 <div style={{ fontSize: '12px', color: '#666' }}>
-                                    출처: {q.targetGrade || '-'}{q.logicFlow ? ` · ${q.logicFlow}` : ''}
+                                    출처: {q.targetGrade || '-'} • {typeof q.logicFlow === 'string' ? q.logicFlow : JSON.stringify(q.logicFlow)}
                                 </div>
                             </div>
                         </div>

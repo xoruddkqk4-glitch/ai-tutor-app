@@ -3,24 +3,28 @@ import {
     LayoutDashboard, Users, BookOpen, Settings, Plus, Save,
     Trash2, Upload, FileText, CheckCircle, Play, LogOut, Edit
 } from 'lucide-react';
-import type { Question, Room } from '../types';
-import { signIn, signUp, signOut, getCurrentUser } from '../lib/auth';
+import type { Question, Room, LogicFlowStep } from '../types';
+import { signIn, signUp, signOut, getCurrentUser, resetPassword } from '../lib/auth';
 import { getQuestions, createQuestion, updateQuestion, deleteQuestion } from '../lib/questions';
 import { getStudents, createStudents, type Student } from '../lib/students';
 import { getRooms, deleteRoom } from '../lib/rooms';
 
 
-import { getTeacherSettings, updateTeacherSettings, getAppConfig, updateAppConfig } from '../lib/settings';
+import { getTeacherSettings, updateTeacherSettings, getAppConfig, updateAppConfig, getAllTeachers, toggleTeacherActive, updateTeacherMaxQuestions, deleteTeacher, type TeacherRecord } from '../lib/settings';
 
 type TeacherRole = 'master' | 'regular';
 
 export default function TeacherAdminPage() {
     // --- State ---
-    const [activeTab, setActiveTab] = useState<'dashboard' | 'materials' | 'students' | 'settings'>('dashboard');
+    const [activeTab, setActiveTab] = useState<'welcome' | 'dashboard' | 'materials' | 'students' | 'settings'>('welcome');
     const [isLogin, setIsLogin] = useState(false);
-    const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+    const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot'>('login');
     const [loginEmail, setLoginEmail] = useState('');
     const [loginPassword, setLoginPassword] = useState('');
+    const [teacherId, setTeacherId] = useState('');
+    const [forgotEmailSent, setForgotEmailSent] = useState(false);
+    const [loginQuestionLimit, setLoginQuestionLimit] = useState<number | null>(null);
+    const [loginNotice, setLoginNotice] = useState<string>('');
 
     // Teacher Info
     const [teacherEmail, setTeacherEmail] = useState('');
@@ -47,6 +51,10 @@ export default function TeacherAdminPage() {
     const [googleScriptUrl, setGoogleScriptUrl] = useState('');
     const [maxQuestionsLimit, setMaxQuestionsLimit] = useState(50);
     const [limitInput, setLimitInput] = useState('50');
+    const [loginNoticeText, setLoginNoticeText] = useState(`회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.
+서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.
+서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.
+기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`);
     // Bridge for existing code compatibility
     const maxQuestionsForRegular = maxQuestionsLimit;
 
@@ -59,40 +67,92 @@ export default function TeacherAdminPage() {
     const [selectedStudentsForDeletion, setSelectedStudentsForDeletion] = useState<number[]>([]);
 
     // Logic Flow Steps
-    const [flowSteps, setFlowSteps] = useState<string[]>(['']);
+    const [flowSteps, setFlowSteps] = useState<LogicFlowStep[]>([{ role: '', conjunction: '', content: '' }]);
+
+    // Teacher Management (Master Only)
+    const [teacherList, setTeacherList] = useState<TeacherRecord[]>([]);
 
     // --- Handlers ---
+
+    // 로그인 페이지용 문항 제한수 및 안내문구 조회 (항상 최신 데이터를 가져오도록 함수화)
+    const loadLoginConfig = async () => {
+        console.log('[loadLoginConfig] Fetching fresh config for login page...');
+        try {
+            const limit = await getAppConfig('limit_regular_questions');
+            if (limit) {
+                setLoginQuestionLimit(Number(limit));
+            } else {
+                setLoginQuestionLimit(50); // 기본값 설정
+            }
+
+            const notice = await getAppConfig('login_notice_text');
+            if (notice) {
+                setLoginNotice(notice);
+                setLoginNoticeText(notice); // 에디터용 데이터도 동기화
+            } else {
+                const defaultNotice = `회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.\n서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.\n서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.\n기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`;
+                setLoginNotice(defaultNotice);
+                setLoginNoticeText(defaultNotice);
+            }
+        } catch (error) {
+            console.error('[loadLoginConfig] Error fetching config:', error);
+        }
+    };
+
+    useEffect(() => {
+        loadLoginConfig();
+    }, [isLogin]);
 
     // 세션 복원 (자동 로그인)
     useEffect(() => {
         getCurrentUser().then(user => {
             if (user) {
+                setTeacherId(user.id);
                 setTeacherEmail(user.email);
                 setTeacherRole(user.role);
                 setIsLogin(true);
+                // After session restore, always go to welcome
+                setActiveTab('welcome');
                 loadQuestions();
                 loadStudents();
                 loadRooms();
                 loadSettings(user.id);
                 loadAppConfig();
+            } else {
+                console.log('[SessionRestore] No user found');
             }
         }).catch(err => {
             console.error('세션 복원 실패:', err);
         });
     }, []);
 
+    // 탭 전환 시 설정 정보 최신화
+    useEffect(() => {
+        if (activeTab === 'settings' && isLogin && teacherId) {
+            loadSettings(teacherId);
+            loadAppConfig();
+            if (teacherRole === 'master') {
+                loadTeacherList();
+            }
+        }
+    }, [activeTab, isLogin, teacherId]);
+
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
 
         try {
             const user = await signIn(loginEmail, loginPassword);
+            setTeacherId(user.id);
             setTeacherEmail(user.email);
             setTeacherRole(user.role);
             setIsLogin(true);
-            // 로그인 후 문항, 학생, 수업 방 로드
+            setActiveTab('welcome'); // Login defaults to welcome
+            // 로그인 후 문항, 학생, 수업 방 및 설정 로드
             loadQuestions();
             loadStudents();
             loadRooms();
+            loadSettings(user.id);
+            loadAppConfig();
         } catch (error: any) {
             alert('로그인 실패: ' + (error.message || '이메일 또는 비밀번호를 확인하세요'));
         }
@@ -103,9 +163,13 @@ export default function TeacherAdminPage() {
 
         try {
             const user = await signUp(loginEmail, loginPassword);
+            setTeacherId(user.id);
             setTeacherEmail(user.email);
             setTeacherRole(user.role);
             setIsLogin(true);
+            setActiveTab('welcome'); // Signup defaults to welcome
+            loadSettings(user.id);
+            loadAppConfig();
             alert('회원가입 성공! 일반 교사로 등록되었습니다.');
         } catch (error: any) {
             alert('회원가입 실패: ' + (error.message || '이메일 또는 비밀번호를 확인하세요'));
@@ -116,8 +180,10 @@ export default function TeacherAdminPage() {
         try {
             await signOut();
             setIsLogin(false);
+            setTeacherId('');
             setTeacherEmail('');
             setTeacherRole('regular');
+            setActiveTab('welcome');
 
             // Clear all sensitive states
             setApiKey('');
@@ -130,6 +196,13 @@ export default function TeacherAdminPage() {
             setQuestions([]);
             setSavedStudents([]);
             setParsedStudents([]);
+            setBulkStudentText('');
+            setTeacherList([]);
+
+            // Clear editing state
+            setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
+            setEditingQuestion(null);
+            setFlowSteps([{ role: '', conjunction: '', content: '' }]);
 
             // Reset Limits
             setMaxQuestionsLimit(50);
@@ -193,6 +266,59 @@ export default function TeacherAdminPage() {
             setMaxQuestionsLimit(Number(limit));
             setLimitInput(limit);
         }
+        const notice = await getAppConfig('login_notice_text');
+        if (notice) {
+            setLoginNoticeText(notice);
+        }
+    };
+
+    // 교사 목록 로드 (Master Only)
+    const loadTeacherList = async () => {
+        try {
+            const data = await getAllTeachers();
+            setTeacherList(data);
+        } catch (error: any) {
+            console.error('교사 목록 로드 실패:', error);
+        }
+    };
+
+    // 교사 활성/비활성 토글
+    const handleToggleTeacherActive = async (teacher: TeacherRecord) => {
+        const newStatus = !teacher.is_active;
+        const action = newStatus ? '활성화' : '비활성화';
+        if (!confirm(`${teacher.email} 교사를 ${action}하시겠습니까?`)) return;
+
+        try {
+            await toggleTeacherActive(teacher.id, newStatus);
+            await loadTeacherList();
+            alert(`${teacher.email} 교사가 ${action}되었습니다.`);
+        } catch (error: any) {
+            alert('교사 상태 변경 실패: ' + error.message);
+        }
+    };
+
+    // 교사 삭제
+    const handleDeleteTeacher = async (teacher: TeacherRecord) => {
+        if (!confirm(`정말 ${teacher.email} 교사를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+
+        try {
+            await deleteTeacher(teacher.id);
+            await loadTeacherList();
+            alert(`${teacher.email} 교사가 삭제되었습니다.`);
+        } catch (error: any) {
+            alert('교사 삭제 실패: ' + error.message);
+        }
+    };
+
+    // 교사 개별 문항 제한수 수정
+    const handleUpdateTeacherLimit = async (teacher: TeacherRecord, value: string) => {
+        const numValue = value.trim() === '' ? null : Number(value);
+        try {
+            await updateTeacherMaxQuestions(teacher.id, numValue);
+            await loadTeacherList();
+        } catch (error: any) {
+            alert('문항 제한수 수정 실패: ' + error.message);
+        }
     };
 
     // 학생 명단 파싱 (탭/공백/콤마 구분)
@@ -252,14 +378,14 @@ export default function TeacherAdminPage() {
                 examCode: newQuestion.examCode!,
                 targetGrade: newQuestion.targetGrade ?? '',
                 topic: newQuestion.topic!,
-                logicFlow: flowSteps.filter(s => s.trim()).join('\n'),  // flowSteps에서 가져오기
+                logicFlow: flowSteps.filter(s => s.role.trim() || s.content.trim()),
                 passage: newQuestion.passage!
             };
 
             await createQuestion(q);
             await loadQuestions(); // 문항 목록 새로고침
             setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-            setFlowSteps(['']);  // flowSteps도 초기화
+            setFlowSteps([{ role: '', conjunction: '', content: '' }]);  // flowSteps도 초기화
             alert('문항이 추가되었습니다.');
         } catch (error: any) {
             alert('문항 추가 실패: ' + error.message);
@@ -272,9 +398,9 @@ export default function TeacherAdminPage() {
         try {
             const updates: Partial<Omit<Question, 'id'>> = {
                 examCode: newQuestion.examCode,
-                targetGrade: newQuestion.targetGrade,
+                targetGrade: newQuestion.targetGrade ?? '',
                 topic: newQuestion.topic,
-                logicFlow: flowSteps.filter(s => s.trim()).join('\n'),
+                logicFlow: flowSteps.filter(s => s.role.trim() || s.content.trim()),
                 passage: newQuestion.passage
             };
 
@@ -282,7 +408,7 @@ export default function TeacherAdminPage() {
             await loadQuestions();
             setEditingQuestion(null);
             setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-            setFlowSteps(['']);
+            setFlowSteps([{ role: '', conjunction: '', content: '' }]);
             alert('문항이 수정되었습니다.');
         } catch (error: any) {
             alert('문항 수정 실패: ' + error.message);
@@ -299,6 +425,184 @@ export default function TeacherAdminPage() {
         } catch (error: any) {
             alert('문항 삭제 실패: ' + error.message);
         }
+    };
+
+    const renderWelcome = () => (
+        <div className="teacher-content-wrapper" style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            minHeight: '80vh',
+            textAlign: 'center',
+            padding: '40px',
+            background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
+            borderRadius: '24px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)'
+        }}>
+            <div style={{
+                width: '100px',
+                height: '100px',
+                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+                borderRadius: '28px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '32px',
+                boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.3)',
+                transform: 'rotate(-5deg)'
+            }}>
+                <BookOpen size={48} color="white" />
+            </div>
+            <h1 style={{
+                fontSize: '42px',
+                fontWeight: '850',
+                color: '#1e293b',
+                marginBottom: '20px',
+                letterSpacing: '-0.025em',
+                lineHeight: '1.2'
+            }}>
+                Welcome Back,<br />
+                <span style={{ color: '#3b82f6' }}>AI Tutor</span>
+            </h1>
+            <p style={{
+                fontSize: '19px',
+                color: '#475569',
+                maxWidth: '650px',
+                lineHeight: '1.7',
+                marginBottom: '48px',
+                fontWeight: '400'
+            }}>
+                선생님을 위한 지능형 학습 보조 솔루션, AI Tutor 교사 페이지입니다.<br />
+                왼쪽 메뉴를 통해 학습 자료를 관리하고 실시간 대시보드를 확인하세요.
+            </p>
+            <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '24px',
+                width: '100%',
+                maxWidth: '850px'
+            }}>
+                <div
+                    className="welcome-card"
+                    style={{
+                        padding: '32px 24px',
+                        background: 'white',
+                        borderRadius: '20px',
+                        border: '1px solid #e2e8f0',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onClick={() => setActiveTab('students')}
+                >
+                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                        <Users size={24} color="#ef4444" />
+                    </div>
+                    <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>학생 명단 관리</h3>
+                    <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>클래스별 학생 명단을 등록하고 개인별 학습 역량을 설정 및 관리합니다.</p>
+                </div>
+                <div
+                    className="welcome-card"
+                    style={{
+                        padding: '32px 24px',
+                        background: 'white',
+                        borderRadius: '20px',
+                        border: '1px solid #e2e8f0',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onClick={() => setActiveTab('materials')}
+                >
+                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                        <FileText size={24} color="#3b82f6" />
+                    </div>
+                    <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>학습 자료 관리</h3>
+                    <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>지문 등록 및 논리 흐름 설정을 통해 AI 튜터의 지식 베이스를 구축합니다.</p>
+                </div>
+                <div
+                    className="welcome-card"
+                    style={{
+                        padding: '32px 24px',
+                        background: 'white',
+                        borderRadius: '20px',
+                        border: '1px solid #e2e8f0',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
+                    }}
+                    onClick={() => setActiveTab('dashboard')}
+                >
+                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                        <LayoutDashboard size={24} color="#10b981" />
+                    </div>
+                    <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>수업 대시보드</h3>
+                    <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>수업 방을 생성하고 참여 학생들의 학습 현황을 실시간으로 모니터링합니다.</p>
+                </div>
+            </div>
+            <style>{`
+                .welcome-card:hover {
+                    transform: translateY(-8px);
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+                    border-color: #3b82f6;
+                }
+            `}</style>
+        </div>
+    );
+
+    // Helper to robustly parse logicFlow from DB into LogicFlowStep objects
+    const safeParseLogicFlow = (logicFlow: any): LogicFlowStep[] => {
+        if (!logicFlow) return [];
+
+        let steps: any[] = [];
+        if (Array.isArray(logicFlow)) {
+            steps = logicFlow;
+        } else {
+            const trimmed = String(logicFlow).trim();
+            if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) steps = parsed;
+                } catch (e) {
+                    console.error("JSON parse failed for logicFlow:", e);
+                }
+            }
+            if (steps.length === 0 && trimmed) {
+                // Fallback to regex splitting (newlines or arrows)
+                steps = trimmed.split(/\r?\n| -> /).filter(s => s.trim());
+            }
+        }
+
+        return steps.map(step => {
+            // If it's already an object with the right shape
+            if (typeof step === 'object' && step !== null && ('role' in step || 'content' in step)) {
+                return {
+                    role: step.role || '',
+                    conjunction: step.conjunction || '',
+                    content: step.content || ''
+                };
+            }
+
+            // If it's a string, try to parse [Role] Content (Conjunction)
+            const str = String(step).trim();
+            const regex = /^\[(.*?)\]\s*(.*?)\s*(?:\((.*?)\))?$/;
+            const match = str.match(regex);
+
+            if (match) {
+                return {
+                    role: match[1] || '',
+                    content: match[2] || '',
+                    conjunction: match[3] || ''
+                };
+            }
+
+            // Extreme fallback: whole string as content
+            return { role: '', conjunction: '', content: str };
+        });
     };
 
     const handleCreateRoom = () => {
@@ -352,14 +656,15 @@ export default function TeacherAdminPage() {
     const handleEditQuestion = (q: Question) => {
         setEditingQuestion(q);
         setNewQuestion(q);
-        // Split by newline or ' -> ' for backward compatibility
-        setFlowSteps(q.logicFlow ? q.logicFlow.split(/\r?\n| -> /) : ['']);
+        // Use robust parsing for logicFlow
+        const steps = safeParseLogicFlow(q.logicFlow);
+        setFlowSteps(steps.length > 0 ? steps : [{ role: '', conjunction: '', content: '' }]);
     };
 
     const handleCancelEdit = () => {
         setEditingQuestion(null);
         setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-        setFlowSteps(['']);
+        setFlowSteps([{ role: '', conjunction: '', content: '' }]);
     };
 
     const handleSortColumn = (column: 'class' | 'number' | 'name' | 'competency') => {
@@ -422,6 +727,7 @@ export default function TeacherAdminPage() {
             // 2. Global Config (Master Only)
             if (teacherRole === 'master') {
                 await updateAppConfig('limit_regular_questions', limitInput);
+                await updateAppConfig('login_notice_text', loginNoticeText);
                 setMaxQuestionsLimit(Number(limitInput));
             }
 
@@ -446,6 +752,17 @@ export default function TeacherAdminPage() {
         return 0;
     });
 
+    // --- 비밀번호 재설정 핸들러 ---
+    const handleForgotPassword = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            await resetPassword(loginEmail);
+            setForgotEmailSent(true);
+        } catch (error: any) {
+            alert('비밀번호 재설정 이메일 발송 실패: ' + (error.message || '이메일을 확인해주세요.'));
+        }
+    };
+
     // --- Login View ---
     if (!isLogin) {
         return (
@@ -455,84 +772,220 @@ export default function TeacherAdminPage() {
                         <div className="teacher-login-icon">
                             <BookOpen style={{ color: 'white', width: '32px', height: '32px' }} />
                         </div>
-                        <h1>AI Tutor 관리자</h1>
+                        <h1>AI Tutor 사용자</h1>
                         <p>선생님 계정으로 로그인하세요</p>
                     </div>
 
                     {/* 로그인/회원가입 탭 */}
-                    <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
-                        <button
-                            type="button"
-                            onClick={() => setAuthMode('login')}
-                            style={{
-                                flex: 1,
-                                padding: '12px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                background: authMode === 'login' ? '#3b82f6' : '#e5e7eb',
-                                color: authMode === 'login' ? 'white' : '#6b7280',
-                                fontWeight: authMode === 'login' ? '600' : '400',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            로그인
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setAuthMode('signup')}
-                            style={{
-                                flex: 1,
-                                padding: '12px',
-                                border: 'none',
-                                borderRadius: '8px',
-                                background: authMode === 'signup' ? '#3b82f6' : '#e5e7eb',
-                                color: authMode === 'signup' ? 'white' : '#6b7280',
-                                fontWeight: authMode === 'signup' ? '600' : '400',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            회원가입
-                        </button>
-                    </div>
+                    {authMode !== 'forgot' && (
+                        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setAuthMode('login')}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: authMode === 'login' ? '#3b82f6' : '#e5e7eb',
+                                    color: authMode === 'login' ? 'white' : '#6b7280',
+                                    fontWeight: authMode === 'login' ? '600' : '400',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                로그인
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAuthMode('signup')}
+                                style={{
+                                    flex: 1,
+                                    padding: '12px',
+                                    border: 'none',
+                                    borderRadius: '8px',
+                                    background: authMode === 'signup' ? '#3b82f6' : '#e5e7eb',
+                                    color: authMode === 'signup' ? 'white' : '#6b7280',
+                                    fontWeight: authMode === 'signup' ? '600' : '400',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s'
+                                }}
+                            >
+                                회원가입
+                            </button>
+                        </div>
+                    )}
 
-                    <form onSubmit={authMode === 'login' ? handleLogin : handleSignup} className="teacher-login-form">
-                        <div className="teacher-login-input-group">
-                            <label>이메일</label>
-                            <input
-                                type="email"
-                                placeholder="teacher@school.com"
-                                value={loginEmail}
-                                onChange={(e) => setLoginEmail(e.target.value)}
-                                required
-                            />
+                    {/* 비밀번호 찾기 모드 */}
+                    {authMode === 'forgot' ? (
+                        <div style={{ textAlign: 'center' }}>
+                            {forgotEmailSent ? (
+                                <div style={{
+                                    padding: '24px',
+                                    background: '#f0fdf4',
+                                    borderRadius: '12px',
+                                    border: '1px solid #86efac',
+                                    marginBottom: '20px'
+                                }}>
+                                    <div style={{ fontSize: '36px', marginBottom: '12px' }}>📧</div>
+                                    <p style={{ color: '#166534', fontWeight: '600', marginBottom: '8px' }}>이메일이 발송되었습니다!</p>
+                                    <p style={{ color: '#15803d', fontSize: '14px' }}>{loginEmail}로 비밀번호 재설정 링크를 보냈습니다. 이메일함을 확인해주세요.</p>
+                                </div>
+                            ) : (
+                                <form onSubmit={handleForgotPassword} className="teacher-login-form">
+                                    <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '20px', textAlign: 'left' }}>
+                                        가입하신 이메일 주소를 입력하시면 비밀번호 재설정 링크를 보내드립니다.
+                                    </p>
+                                    <div className="teacher-login-input-group">
+                                        <label>이메일</label>
+                                        <input
+                                            type="email"
+                                            placeholder="teacher@school.com"
+                                            value={loginEmail}
+                                            onChange={(e) => setLoginEmail(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                    <button
+                                        type="submit"
+                                        className="teacher-login-button"
+                                        disabled={!loginEmail.trim()}
+                                        style={{
+                                            background: loginEmail.trim() ? '#3b82f6' : '#e5e7eb',
+                                            color: loginEmail.trim() ? 'white' : '#9ca3af',
+                                            opacity: loginEmail.trim() ? 1 : 0.6,
+                                            cursor: loginEmail.trim() ? 'pointer' : 'not-allowed',
+                                            transition: 'all 0.2s',
+                                            marginBottom: '12px'
+                                        }}
+                                    >
+                                        재설정 이메일 발송
+                                    </button>
+                                </form>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() => { setAuthMode('login'); setForgotEmailSent(false); }}
+                                style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#6b7280',
+                                    fontSize: '14px',
+                                    cursor: 'pointer',
+                                    textDecoration: 'underline'
+                                }}
+                            >
+                                ← 로그인으로 돌아가기
+                            </button>
                         </div>
-                        <div className="teacher-login-input-group">
-                            <label>비밀번호</label>
-                            <input
-                                type="password"
-                                placeholder="••••••••"
-                                value={loginPassword}
-                                onChange={(e) => setLoginPassword(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <button
-                            type="submit"
-                            className="teacher-login-button"
-                            disabled={!loginEmail.trim() || !loginPassword.trim()}
-                            style={{
-                                background: (loginEmail.trim() && loginPassword.trim()) ? '#3b82f6' : '#e5e7eb',
-                                color: (loginEmail.trim() && loginPassword.trim()) ? 'white' : '#9ca3af',
-                                opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.6,
-                                cursor: (loginEmail.trim() && loginPassword.trim()) ? 'pointer' : 'not-allowed',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            {authMode === 'login' ? '로그인' : '회원가입'}
-                        </button>
-                    </form>
+                    ) : (
+                        <>
+                            <form onSubmit={authMode === 'login' ? handleLogin : handleSignup} className="teacher-login-form">
+                                <div className="teacher-login-input-group">
+                                    <label>이메일</label>
+                                    <input
+                                        type="email"
+                                        placeholder="teacher@school.com"
+                                        value={loginEmail}
+                                        onChange={(e) => setLoginEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="teacher-login-input-group">
+                                    <label>비밀번호</label>
+                                    <input
+                                        type="password"
+                                        placeholder="••••••••"
+                                        value={loginPassword}
+                                        onChange={(e) => setLoginPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button
+                                    type="submit"
+                                    className="teacher-login-button"
+                                    disabled={!loginEmail.trim() || !loginPassword.trim()}
+                                    style={{
+                                        background: (loginEmail.trim() && loginPassword.trim()) ? '#3b82f6' : '#e5e7eb',
+                                        color: (loginEmail.trim() && loginPassword.trim()) ? 'white' : '#9ca3af',
+                                        opacity: (loginEmail.trim() && loginPassword.trim()) ? 1 : 0.6,
+                                        cursor: (loginEmail.trim() && loginPassword.trim()) ? 'pointer' : 'not-allowed',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    {authMode === 'login' ? '로그인' : '회원가입'}
+                                </button>
+                            </form>
+                            {/* 비밀번호 찾기 링크 */}
+                            {authMode === 'login' && (
+                                <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setAuthMode('forgot'); setForgotEmailSent(false); }}
+                                        style={{
+                                            background: 'none',
+                                            border: 'none',
+                                            color: '#6b7280',
+                                            fontSize: '13px',
+                                            cursor: 'pointer',
+                                            textDecoration: 'underline'
+                                        }}
+                                    >
+                                        비밀번호를 잊으셨나요?
+                                    </button>
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {/* 안내 문구 */}
+                    <div style={{
+                        marginTop: '28px',
+                        padding: '16px 18px',
+                        background: '#f8fafc',
+                        borderRadius: '10px',
+                        border: '1px solid #e2e8f0',
+                        fontSize: '13px',
+                        color: '#64748b',
+                        lineHeight: '1.8'
+                    }}>
+                        <p style={{ fontWeight: '600', color: '#475569', marginBottom: '8px' }}>📌 서비스 안내</p>
+                        <ol style={{ paddingLeft: '18px', margin: 0 }}>
+                            {loginNotice.split('\n').filter(line => line.trim() !== '').map((line, idx) => {
+                                const limitParts = line.split('{limit}');
+                                return (
+                                    <li key={idx} style={{ marginBottom: '4px' }}>
+                                        {limitParts.map((limitPart, lIdx) => {
+                                            const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/g;
+                                            const emailParts = limitPart.split(emailRegex);
+
+                                            const renderedPart = emailParts.map((part, eIdx) => {
+                                                if (part.match(emailRegex)) {
+                                                    return (
+                                                        <a key={`email-${eIdx}`} href={`mailto:${part}`} style={{ color: '#3b82f6', textDecoration: 'none' }}>
+                                                            {part}
+                                                        </a>
+                                                    );
+                                                }
+                                                return part;
+                                            });
+
+                                            return (
+                                                <React.Fragment key={`limit-${lIdx}`}>
+                                                    {renderedPart}
+                                                    {lIdx < limitParts.length - 1 && (
+                                                        <strong style={{ color: '#3b82f6' }}>
+                                                            {loginQuestionLimit !== null ? loginQuestionLimit : '…'}
+                                                        </strong>
+                                                    )}
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </li>
+                                );
+                            })}
+                        </ol>
+                    </div>
                 </div>
             </div>
         );
@@ -545,10 +998,16 @@ export default function TeacherAdminPage() {
             {/* Sidebar */}
             <aside className="teacher-sidebar">
                 <div className="teacher-sidebar-header">
-                    <div className="teacher-sidebar-logo">
-                        <BookOpen style={{ color: 'white', width: '20px', height: '20px' }} />
+                    <div
+                        className="teacher-sidebar-logo-container"
+                        onClick={() => setActiveTab('welcome')}
+                        style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', gap: '8px' }}
+                    >
+                        <div className="teacher-sidebar-logo">
+                            <BookOpen style={{ color: 'white', width: '20px', height: '20px' }} />
+                        </div>
+                        <span className="teacher-sidebar-title">AI Tutor</span>
                     </div>
-                    <span className="teacher-sidebar-title">AI Tutor</span>
                 </div>
 
                 <nav className="teacher-sidebar-nav">
@@ -612,6 +1071,9 @@ export default function TeacherAdminPage() {
 
             {/* Main Content */}
             <main className="teacher-main">
+
+                {/* --- TAB: Welcome --- */}
+                {activeTab === 'welcome' && renderWelcome()}
 
                 {/* --- TAB: Dashboard (Rooms) --- */}
                 {activeTab === 'dashboard' && (
@@ -712,7 +1174,7 @@ export default function TeacherAdminPage() {
                                     <input
                                         type="text"
                                         className="teacher-input-field"
-                                        placeholder="예: 고3 모의고사, 교육청 기출, EBS"
+                                        placeholder="예: 2024 수능, 교과서 단원명 등"
                                         value={newQuestion.targetGrade || ''}
                                         onChange={e => setNewQuestion({ ...newQuestion, targetGrade: e.target.value })}
                                     />
@@ -733,6 +1195,14 @@ export default function TeacherAdminPage() {
                             <div className="teacher-input-group">
                                 <label className="teacher-input-label">논리 흐름 (순서대로 입력)</label>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {/* Header with Examples */}
+                                    <div style={{ display: 'flex', gap: '8px', paddingLeft: '32px', marginBottom: '-4px' }}>
+                                        <div style={{ flex: '1.2', fontSize: '11px', color: '#000', textAlign: 'center' }}>논리적 역할 (필수)<br />ex) 주제, 설명, 결론 등</div>
+                                        <div style={{ flex: '1', fontSize: '11px', color: '#000', textAlign: 'center' }}>연결어 (선택)<br />ex) for example, therefore</div>
+                                        <div style={{ flex: '2', fontSize: '11px', color: '#000', textAlign: 'center' }}>중심 의미 (필수)</div>
+                                        <div style={{ width: '40px' }}></div>
+                                    </div>
+
                                     {flowSteps.map((step, index) => (
                                         <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                             <div style={{
@@ -745,30 +1215,61 @@ export default function TeacherAdminPage() {
                                             }}>
                                                 {index + 1}
                                             </div>
+
+                                            {/* Role */}
                                             <input
                                                 type="text"
                                                 className="teacher-input-field"
-                                                placeholder={`단계 ${index + 1} 입력 (예: 문제 제기)`}
-                                                value={step}
+                                                placeholder="역할"
+                                                value={step.role}
                                                 onChange={(e) => {
                                                     const newSteps = [...flowSteps];
-                                                    newSteps[index] = e.target.value;
+                                                    newSteps[index] = { ...newSteps[index], role: e.target.value };
+                                                    setFlowSteps(newSteps);
+                                                }}
+                                                style={{ flex: '1.2' }}
+                                            />
+
+                                            {/* Conjunction */}
+                                            <input
+                                                type="text"
+                                                className="teacher-input-field"
+                                                placeholder="연결어"
+                                                value={step.conjunction}
+                                                onChange={(e) => {
+                                                    const newSteps = [...flowSteps];
+                                                    newSteps[index] = { ...newSteps[index], conjunction: e.target.value };
+                                                    setFlowSteps(newSteps);
+                                                }}
+                                                style={{ flex: '1' }}
+                                            />
+
+                                            {/* Content */}
+                                            <input
+                                                type="text"
+                                                className="teacher-input-field"
+                                                placeholder="중심 의미"
+                                                value={step.content}
+                                                onChange={(e) => {
+                                                    const newSteps = [...flowSteps];
+                                                    newSteps[index] = { ...newSteps[index], content: e.target.value };
                                                     setFlowSteps(newSteps);
                                                 }}
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') {
                                                         e.preventDefault();
                                                         const newSteps = [...flowSteps];
-                                                        newSteps.splice(index + 1, 0, '');
+                                                        newSteps.splice(index + 1, 0, { role: '', conjunction: '', content: '' });
                                                         setFlowSteps(newSteps);
                                                     }
                                                 }}
-                                                style={{ flex: 1 }}
+                                                style={{ flex: '2' }}
                                             />
+
                                             <button
                                                 onClick={() => {
                                                     const newSteps = flowSteps.filter((_, i) => i !== index);
-                                                    setFlowSteps(newSteps.length ? newSteps : ['']);
+                                                    setFlowSteps(newSteps.length ? newSteps : [{ role: '', conjunction: '', content: '' }]);
                                                 }}
                                                 className="teacher-button-secondary"
                                                 style={{ padding: '8px', color: '#ef4444', borderColor: '#fee2e2' }}
@@ -779,7 +1280,7 @@ export default function TeacherAdminPage() {
                                         </div>
                                     ))}
                                     <button
-                                        onClick={() => setFlowSteps([...flowSteps, ''])}
+                                        onClick={() => setFlowSteps([...flowSteps, { role: '', conjunction: '', content: '' }])}
                                         className="teacher-button-secondary"
                                         style={{ alignSelf: 'start', marginTop: '4px' }}
                                     >
@@ -843,10 +1344,10 @@ export default function TeacherAdminPage() {
                                 questions.map((q) => (
                                     <div key={q.id} className="teacher-question-card">
                                         <div style={{ flex: 1 }}>
-                                            <div style={{ marginBottom: '8px', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px' }}>
+                                            <div style={{ marginBottom: '8px' }}>
                                                 <span className="teacher-question-badge">{q.examCode}</span>
                                                 {q.targetGrade ? (
-                                                    <span className="teacher-question-badge" style={{ background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb' }}>
+                                                    <span className="teacher-question-badge" style={{ background: '#f1f5f9', color: '#475569', marginLeft: '6px' }}>
                                                         출처: {q.targetGrade}
                                                     </span>
                                                 ) : null}
@@ -860,21 +1361,22 @@ export default function TeacherAdminPage() {
                                                     <span className="teacher-card-label">논리 흐름:</span>
                                                     <span className="teacher-card-value">
                                                         {q.logicFlow ? (
-                                                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
-                                                                {q.logicFlow.split(/\r?\n| -> /).map((step, i, arr) => (
-                                                                    <React.Fragment key={i}>
-                                                                        <div style={{
-                                                                            background: '#f3f4f6', padding: '4px 10px',
-                                                                            borderRadius: '6px', fontSize: '13px',
-                                                                            border: '1px solid #e5e7eb'
-                                                                        }}>
-                                                                            {step}
-                                                                        </div>
-                                                                        {i < arr.length - 1 && <span style={{ color: '#9ca3af' }}>→</span>}
-                                                                    </React.Fragment>
+                                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                                {safeParseLogicFlow(q.logicFlow).map((step, i) => (
+                                                                    <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                                                        <span style={{ fontSize: '11px', color: '#94a3b8', width: '15px' }}>{i + 1}</span>
+                                                                        <span style={{
+                                                                            fontSize: '11px', background: '#3b82f6', color: 'white',
+                                                                            padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold'
+                                                                        }}>[{step.role || '미지정'}]</span>
+                                                                        {step.conjunction && (
+                                                                            <span style={{ fontSize: '11px', color: '#64748b' }}>({step.conjunction})</span>
+                                                                        )}
+                                                                        <span style={{ fontSize: '12px', color: '#1e293b' }}>{step.content}</span>
+                                                                    </div>
                                                                 ))}
                                                             </div>
-                                                        ) : '-'}
+                                                        ) : ('-')}
                                                     </span>
                                                 </div>
                                             </div>
@@ -1067,38 +1569,185 @@ export default function TeacherAdminPage() {
                 {/* --- TAB: Settings --- */}
                 {activeTab === 'settings' && (
                     <div className="teacher-content-wrapper">
-                        <div className="teacher-section-header">
-                            <h1 className="teacher-section-title">설정</h1>
-                            <p className="teacher-section-subtitle">시스템 설정을 관리하세요.</p>
+                        <div className="teacher-section-header" style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'flex-start',
+                            marginBottom: '24px'
+                        }}>
+                            <div>
+                                <h1 className="teacher-section-title">설정</h1>
+                                <p className="teacher-section-subtitle">시스템 설정을 관리하세요.</p>
+                            </div>
+                            <button onClick={handleSaveSettings} className="teacher-button-primary">
+                                <Save size={18} /> 설정 저장
+                            </button>
                         </div>
 
 
                         {/* Master Config Section */}
                         {teacherRole === 'master' && (
-                            <div className="teacher-content-card" style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}>
-                                <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e40af' }}>
-                                    🛠️ 시스템 설정 (관리자 전용)
-                                </h3>
-                                <div className="teacher-input-group">
-                                    <label className="teacher-input-label">일반 교사 문항 등록 제한 수</label>
-                                    <input
-                                        type="number"
-                                        className="teacher-input-field"
-                                        value={limitInput}
-                                        onChange={e => setLimitInput(e.target.value)}
-                                        placeholder="50"
-                                    />
-                                    <div className="teacher-alert-info">
-                                        모든 일반 교사에게 적용되는 문항 등록 최대 개수입니다.
+                            <>
+                                <div className="teacher-content-card" style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}>
+                                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e40af' }}>
+                                        🛠️ 시스템 설정 (관리자 전용)
+                                    </h3>
+                                    <div className="teacher-input-group">
+                                        <label className="teacher-input-label">일반 교사 문항 등록 제한 수</label>
+                                        <input
+                                            type="number"
+                                            className="teacher-input-field"
+                                            value={limitInput}
+                                            onChange={e => setLimitInput(e.target.value)}
+                                            placeholder="50"
+                                        />
+                                        <div className="teacher-alert-info">
+                                            모든 일반 교사에게 적용되는 문항 등록 최대 개수입니다.
+                                        </div>
+                                    </div>
+
+                                    <div className="teacher-input-group" style={{ marginTop: '20px' }}>
+                                        <label className="teacher-input-label">로그인 페이지 안내 문구</label>
+                                        <textarea
+                                            className="teacher-textarea"
+                                            rows={5}
+                                            value={loginNoticeText}
+                                            onChange={e => setLoginNoticeText(e.target.value)}
+                                            placeholder="안내 문구를 입력하세요. {limit}를 입력하면 '일반 교사 문항 등록 제한 수'로 자동 변환됩니다."
+                                            style={{ lineHeight: '1.6' }}
+                                        />
+                                        <div className="teacher-alert-info" style={{ marginTop: '8px' }}>
+                                            줄바꿈(Enter) 시 번호 매기기 목록(1, 2, 3...)으로 표시됩니다.
+                                            <br />문구 내에 <strong>{`{limit}`}</strong>를 입력하면 위의 '문항 등록 제한 수' 값으로 자동 치환됩니다.
+                                            <br />이메일 주소를 입력하면 자동으로 이메일 보내기 링크가 생성됩니다.
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+
+                                {/* Teacher Management Table */}
+                                <div className="teacher-content-card" style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}>
+                                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e40af' }}>
+                                        👥 교사 회원 관리
+                                    </h3>
+                                    {teacherList.length === 0 ? (
+                                        <div style={{ textAlign: 'center', color: '#6b7280', padding: '24px' }}>
+                                            등록된 일반 교사가 없습니다.
+                                        </div>
+                                    ) : (
+                                        <div style={{ overflowX: 'auto' }}>
+                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
+                                                <thead>
+                                                    <tr style={{ background: '#dbeafe', borderBottom: '2px solid #93c5fd' }}>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', color: '#1e40af', width: '30%' }}>이메일</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#1e40af', width: '15%' }}>상태</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#1e40af', width: '25%' }}>문항 제한수</th>
+                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#1e40af', width: '30%' }}>관리</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {teacherList.map((t) => (
+                                                        <tr key={t.id} style={{ borderBottom: '1px solid #e5e7eb', background: t.is_active ? 'white' : '#fef2f2' }}>
+                                                            <td style={{ padding: '10px 12px', color: t.is_active ? '#222' : '#9ca3af' }}>
+                                                                {t.email}
+                                                                {!t.is_active && <span style={{ marginLeft: '8px', fontSize: '11px', color: '#ef4444' }}>(중지됨)</span>}
+                                                            </td>
+                                                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                                                <span style={{
+                                                                    display: 'inline-block',
+                                                                    padding: '2px 10px',
+                                                                    borderRadius: '12px',
+                                                                    fontSize: '12px',
+                                                                    fontWeight: '600',
+                                                                    background: t.is_active ? '#dcfce7' : '#fee2e2',
+                                                                    color: t.is_active ? '#166534' : '#991b1b'
+                                                                }}>
+                                                                    {t.is_active ? '✅ 활성' : '⛔ 중지'}
+                                                                </span>
+                                                            </td>
+                                                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                                                                    <input
+                                                                        type="number"
+                                                                        style={{
+                                                                            width: '70px',
+                                                                            padding: '4px 8px',
+                                                                            border: '1px solid #d1d5db',
+                                                                            borderRadius: '6px',
+                                                                            textAlign: 'center',
+                                                                            fontSize: '13px'
+                                                                        }}
+                                                                        defaultValue={t.max_questions ?? maxQuestionsLimit}
+                                                                        onBlur={(e) => {
+                                                                            const newVal = e.target.value;
+                                                                            const currentVal = t.max_questions;
+                                                                            const defaultVal = maxQuestionsLimit;
+                                                                            if (Number(newVal) !== (currentVal ?? defaultVal)) {
+                                                                                handleUpdateTeacherLimit(t, newVal);
+                                                                            }
+                                                                        }}
+                                                                        onKeyDown={(e) => {
+                                                                            if (e.key === 'Enter') {
+                                                                                (e.target as HTMLInputElement).blur();
+                                                                            }
+                                                                        }}
+                                                                    />
+                                                                    {t.max_questions === null && (
+                                                                        <span style={{ fontSize: '11px', color: '#6b7280', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px' }}>기본값</span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+                                                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'nowrap' }}>
+                                                                    <button
+                                                                        onClick={() => handleToggleTeacherActive(t)}
+                                                                        style={{
+                                                                            padding: '4px 12px',
+                                                                            border: 'none',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '12px',
+                                                                            fontWeight: '500',
+                                                                            cursor: 'pointer',
+                                                                            background: t.is_active ? '#fef3c7' : '#dcfce7',
+                                                                            color: t.is_active ? '#92400e' : '#166534',
+                                                                            transition: 'all 0.2s',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}
+                                                                    >
+                                                                        {t.is_active ? '🚫 중지' : '✅ 활성화'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteTeacher(t)}
+                                                                        style={{
+                                                                            padding: '4px 12px',
+                                                                            border: 'none',
+                                                                            borderRadius: '6px',
+                                                                            fontSize: '12px',
+                                                                            fontWeight: '500',
+                                                                            cursor: 'pointer',
+                                                                            background: '#fee2e2',
+                                                                            color: '#991b1b',
+                                                                            transition: 'all 0.2s',
+                                                                            whiteSpace: 'nowrap'
+                                                                        }}
+                                                                    >
+                                                                        🗑️ 삭제
+                                                                    </button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
                         )}
 
                         {/* API Key */}
                         <div className="teacher-content-card">
                             <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                🔑 OpenAI API 키
+                                🔑 OpenAI API 키 (필수 사항)
                             </h3>
                             <div className="teacher-input-group">
                                 <label className="teacher-input-label">API 키</label>
@@ -1116,9 +1765,12 @@ export default function TeacherAdminPage() {
                         </div>
 
                         {/* Google Drive Integration */}
-                        <div className="teacher-content-card">
-                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                📁 구글 드라이브 연동 (선택 사항)
+                        <div className="teacher-content-card" style={{ opacity: teacherRole === 'master' ? 1 : 0.6 }}>
+                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span>📁 구글 드라이브 연동 (선택 사항)</span>
+                                {teacherRole !== 'master' && (
+                                    <span style={{ fontSize: '12px', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', fontWeight: 'normal' }}>준비 중</span>
+                                )}
                             </h3>
 
                             <div className="teacher-input-group">
@@ -1129,9 +1781,11 @@ export default function TeacherAdminPage() {
                                     placeholder="https://script.google.com/macros/s/.../exec"
                                     value={googleScriptUrl}
                                     onChange={e => setGoogleScriptUrl(e.target.value)}
+                                    disabled={teacherRole !== 'master'}
+                                    style={{ cursor: teacherRole !== 'master' ? 'not-allowed' : 'text', background: teacherRole !== 'master' ? '#f1f5f9' : 'white' }}
                                 />
                                 <div className="teacher-alert-info">
-                                    대화 내용을 구글 드라이브에 저장하려면, 배포된 Apps Script의 웹 앱 URL을 입력하세요.
+                                    대화 내용을 구글 드라이브에 저장하려면, 본인 구글 계정으로 Apps Script를 생성하고 웹 앱으로 배포한 URL을 입력하세요.
                                 </div>
                             </div>
 
@@ -1143,11 +1797,19 @@ export default function TeacherAdminPage() {
                                     placeholder="1AbC2DeF3GhI4JkL5MnO6PqR7StU8VwX9YzA"
                                     value={driveFolderId}
                                     onChange={e => setDriveFolderId(e.target.value)}
+                                    disabled={teacherRole !== 'master'}
+                                    style={{ cursor: teacherRole !== 'master' ? 'not-allowed' : 'text', background: teacherRole !== 'master' ? '#f1f5f9' : 'white' }}
                                 />
                                 <div className="teacher-alert-info">
                                     대화 내용이 저장될 폴더의 ID입니다. (URL의 folders/ 뒷부분)
                                 </div>
                             </div>
+
+                            {teacherRole !== 'master' && (
+                                <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
+                                    💡 일반 교사분들을 위한 <strong>구글 드라이브 간편 연동 기능</strong>이 곧 지원될 예정입니다.
+                                </div>
+                            )}
                         </div>
 
                         {/* System Prompt */}
@@ -1169,11 +1831,7 @@ export default function TeacherAdminPage() {
                             </div>
                         </div>
 
-                        <div className="teacher-flex-end">
-                            <button onClick={handleSaveSettings} className="teacher-button-primary">
-                                <Save size={18} /> 설정 저장
-                            </button>
-                        </div>
+
                     </div>
                 )}
 
