@@ -19,16 +19,22 @@ export async function signIn(email: string, password: string): Promise<AuthUser>
     if (authError) throw authError
     if (!authData.user) throw new Error('로그인 실패')
 
-    // 2. teachers 테이블에서 role 조회
+    // 2. teachers 테이블에서 role, is_active 조회
     const { data: teacher, error: teacherError } = await supabase
         .from('teachers')
-        .select('role')
+        .select('role, is_active')
         .eq('id', authData.user.id)
         .single()
 
     // teachers 테이블에 레코드가 없으면 에러
     if (teacherError) {
         throw new Error('교사 정보를 찾을 수 없습니다. 관리자에게 문의하세요.')
+    }
+
+    // 비활성화된 교사 로그인 차단
+    if (teacher.is_active === false) {
+        await supabase.auth.signOut()
+        throw new Error('계정이 비활성화되었습니다. 관리자에게 문의하세요.')
     }
 
     return {
@@ -67,6 +73,24 @@ export async function signUp(email: string, password: string): Promise<AuthUser>
         email: authData.user.email!,
         role: 'regular'
     }
+}
+
+/**
+ * 새 비밀번호로 업데이트 (재설정 링크 클릭 후 호출)
+ */
+export async function updatePassword(newPassword: string): Promise<void> {
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) throw error
+}
+
+/**
+ * 비밀번호 재설정 이메일 발송
+ */
+export async function resetPassword(email: string): Promise<void> {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/`
+    })
+    if (error) throw error
 }
 
 /**
