@@ -583,9 +583,47 @@ export default function StudentChatInterface() {
                 >
                     <ArrowLeft size={18} /> 뒤로가기
                 </button>
-                <div style={{ background: 'white', padding: '40px', borderRadius: '24px', textAlign: 'center', width: '90%', maxWidth: '400px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
+                <div style={{ background: 'white', padding: '40px', borderRadius: '24px', textAlign: 'center', width: '90%', maxWidth: '460px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                     <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏫</div>
-                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '8px' }}>AI Tutor 교실</h1>
+                    <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#333', marginBottom: '16px' }}>AI Tutor 교실</h1>
+                    <div
+                        style={{
+                            textAlign: 'center',
+                            marginBottom: '20px',
+                            padding: '22px 20px',
+                            borderRadius: '10px',
+                            background: '#f8f9fa',
+                            border: '1px solid #dee2e6',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
+                        }}
+                    >
+                        <div
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '6px',
+                                marginBottom: '14px',
+                                fontSize: '19px',
+                                fontWeight: 700,
+                                color: '#333'
+                            }}
+                        >
+                            <span style={{ fontSize: '26px' }} aria-hidden>🎓</span>
+                            <span>각 반 참여 코드</span>
+                        </div>
+                        <div style={{ fontSize: '17px', lineHeight: 1.9, color: '#333', fontWeight: 500 }}>
+                            <div style={{ marginBottom: '4px' }}>
+                                A반(월6,화2,수1) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>768076</span>
+                            </div>
+                            <div style={{ marginBottom: '4px' }}>
+                                C반(화5,목1,금3) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>611607</span>
+                            </div>
+                            <div>
+                                E반(월3,수4,금1) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>408046</span>
+                            </div>
+                        </div>
+                    </div>
                     <form onSubmit={handleRoomSubmit}>
                         <input
                             type="text"
