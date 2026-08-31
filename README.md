@@ -99,6 +99,17 @@ public/
 └── privacy.html      # 개인정보처리방침 (HTML)
 ```
 
+## 📋 최근 작업 및 변경 이력 (Recent Updates)
+
+### 2026-08-31
+- **에이전트 디렉토리 단일화**:
+  - 중복되던 레거시 `.antigravity` 디렉토리를 제거하고 Antigravity 2.0 표준인 [`.agents`](file:///c:/Users/user/Desktop/web%20app/ai-tutor-app-main/.agents) 디렉토리로 통합 단일화 완료.
+- **스킬 통합 및 최적화**:
+  - `update-readme-push` 스킬을 [`.agents/skills/git-commit`](file:///c:/Users/user/Desktop/web%20app/ai-tutor-app-main/.agents/skills/git-commit/SKILL.md)으로 통합.
+  - `/git-commit`, `/action git-commit` 명령으로 README 업데이트, 상세 작업 결과 기록 및 자동 Git 커밋/푸시 수행 가능.
+- **GitHub 저장소 연결**:
+  - Git 초기화(`git init`) 및 원격 저장소(`https://github.com/xoruddkqk4-glitch/ai-tutor-app.git`) `origin` main 브랜치 연결 완료.
+
 ## 📝 라이선스
 
 This project is private and for educational use only.
