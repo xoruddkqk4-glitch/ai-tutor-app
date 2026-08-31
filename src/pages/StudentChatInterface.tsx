@@ -631,18 +631,15 @@ export default function StudentChatInterface() {
                             <div style={{ marginBottom: '4px' }}>
                                 세문영D(화1,목3,금3) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>353514</span>
                             </div>
-                            <div style={{ marginBottom: '4px' }}>
-                                세문영E(월2,수5,목4) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>946410</span>
-                            </div>
                             <div>
-                                Open Class for Any Guest - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>272394</span>
+                                세문영E(월2,수5,목4) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>946410</span>
                             </div>
                         </div>
                     </div>
                     <div
                         style={{
                             marginBottom: '20px',
-                            padding: '14px 16px',
+                            padding: '16px 16px',
                             borderRadius: '12px',
                             background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
                             border: '1.5px solid #3b82f6',
@@ -650,6 +647,9 @@ export default function StudentChatInterface() {
                             textAlign: 'center'
                         }}
                     >
+                        <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e3a8a', marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid #bfdbfe' }}>
+                            Open Class for Any Guest - <span style={{ color: '#2563eb', fontWeight: 700, fontSize: '18px' }}>272394</span>
+                        </div>
                         <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e3a8a', marginBottom: '6px' }}>
                             📢 New to AI Tutor? Click the link to download
                         </div>
