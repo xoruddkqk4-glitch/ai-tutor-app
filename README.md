@@ -101,6 +101,10 @@ public/
 
 ## 📋 최근 작업 및 변경 이력 (Recent Updates)
 
+### 2026-09-01
+- **학생 접속 화면 다운로드 안내 문구 수정**:
+  - 학생 대화 화면의 가이드 다운로드 안내 문구를 `📢 New to AI Tutor? Click the link to download`에서 `📢 New to AI Tutor? Click the link to download the guide`로 수정.
+
 ### 2026-08-31
 - **학생 접속 화면 레이아웃 및 배너 재배치**:
   - `Open Class for Any Guest` 참여 코드(`272394`)를 상단 카드에서 하단 파란색 다운로드 안내 박스 내부로 이동 배치.

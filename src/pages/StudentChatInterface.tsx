@@ -651,7 +651,7 @@ export default function StudentChatInterface() {
                             Open Class for Any Guest - <span style={{ color: '#2563eb', fontWeight: 700, fontSize: '18px' }}>272394</span>
                         </div>
                         <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e3a8a', marginBottom: '6px' }}>
-                            📢 New to AI Tutor? Click the link to download
+                            📢 New to AI Tutor? Click the link to download the guide
                         </div>
                         <a
                             href="http://tiny.cc/hongik-aitutor"
