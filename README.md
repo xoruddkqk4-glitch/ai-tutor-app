@@ -102,13 +102,14 @@ public/
 ## 📋 최근 작업 및 변경 이력 (Recent Updates)
 
 ### 2026-08-31
-- **에이전트 디렉토리 단일화**:
-  - 중복되던 레거시 `.antigravity` 디렉토리를 제거하고 Antigravity 2.0 표준인 [`.agents`](file:///c:/Users/user/Desktop/web%20app/ai-tutor-app-main/.agents) 디렉토리로 통합 단일화 완료.
-- **스킬 통합 및 최적화**:
-  - `update-readme-push` 스킬을 [`.agents/skills/git-commit`](file:///c:/Users/user/Desktop/web%20app/ai-tutor-app-main/.agents/skills/git-commit/SKILL.md)으로 통합.
-  - `/git-commit`, `/action git-commit` 명령으로 README 업데이트, 상세 작업 결과 기록 및 자동 Git 커밋/푸시 수행 가능.
-- **GitHub 저장소 연결**:
-  - Git 초기화(`git init`) 및 원격 저장소(`https://github.com/xoruddkqk4-glitch/ai-tutor-app.git`) `origin` main 브랜치 연결 완료.
+- **학생 접속 화면 참여 코드 및 다운로드 배너 업데이트**:
+  - 각 반 참여 코드를 최신 항목(`세문영A`, `세문영D`, `세문영E`, `Open Class for Any Guest`)으로 반영.
+  - 학생 입장 화면에 강조된 다운로드 배너(`http://tiny.cc/hongik-aitutor`) 추가.
+- **메인 화면(랜딩 페이지) UI/UX 개선**:
+  - 카드 제목을 `For Teachers` 및 `For Learners`로 변경.
+  - 카드 하단에 2줄의 방문자 안내 문구(중앙 정렬) 추가.
+- **에이전트 디렉토리 단일화 & GitHub 연동**:
+  - 레거시 `.antigravity` 제거, [`.agents`](file:///c:/Users/user/Desktop/web%20app/ai-tutor-app-main/.agents) 단일화 및 Vercel 자동 배포 연동 완료.
 
 ## 📝 라이선스
 

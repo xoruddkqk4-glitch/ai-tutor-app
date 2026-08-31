@@ -626,15 +626,49 @@ export default function StudentChatInterface() {
                         </div>
                         <div style={{ fontSize: '17px', lineHeight: 1.9, color: '#333', fontWeight: 500 }}>
                             <div style={{ marginBottom: '4px' }}>
-                                A반(월6,화2,수1) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>768076</span>
+                                세문영A(월7,화3,목6) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>822435</span>
                             </div>
                             <div style={{ marginBottom: '4px' }}>
-                                C반(화5,목1,금3) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>611607</span>
+                                세문영D(화1,목3,금3) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>353514</span>
+                            </div>
+                            <div style={{ marginBottom: '4px' }}>
+                                세문영E(월2,수5,목4) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>946410</span>
                             </div>
                             <div>
-                                E반(월3,수4,금1) - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>408046</span>
+                                Open Class for Any Guest - <span style={{ color: '#007bff', fontWeight: 600, fontSize: '18px' }}>272394</span>
                             </div>
                         </div>
+                    </div>
+                    <div
+                        style={{
+                            marginBottom: '20px',
+                            padding: '14px 16px',
+                            borderRadius: '12px',
+                            background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+                            border: '1.5px solid #3b82f6',
+                            boxShadow: '0 2px 8px rgba(59, 130, 246, 0.15)',
+                            textAlign: 'center'
+                        }}
+                    >
+                        <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e3a8a', marginBottom: '6px' }}>
+                            📢 New to AI Tutor? Click the link to download
+                        </div>
+                        <a
+                            href="http://tiny.cc/hongik-aitutor"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{
+                                display: 'inline-block',
+                                color: '#2563eb',
+                                fontWeight: 700,
+                                fontSize: '15px',
+                                textDecoration: 'underline',
+                                wordBreak: 'break-all',
+                                transition: 'color 0.2s ease'
+                            }}
+                        >
+                            http://tiny.cc/hongik-aitutor
+                        </a>
                     </div>
                     <form onSubmit={handleRoomSubmit}>
                         <input

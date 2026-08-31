@@ -260,7 +260,7 @@ function App() {
             <div className="landing-card-icon" style={{ background: '#dbeafe' }}>
               <GraduationCap size={48} style={{ color: '#2563eb' }} />
             </div>
-            <h2>선생님용</h2>
+            <h2>For Teachers</h2>
             <p>
               수업을 개설하고<br />학습 현황을 관리하세요
             </p>
@@ -272,12 +272,24 @@ function App() {
             <div className="landing-card-icon" style={{ background: '#fef3c7' }}>
               <School size={48} style={{ color: '#ca8a04' }} />
             </div>
-            <h2>학생용</h2>
+            <h2>For Learners</h2>
             <p>
               AI 튜터와 함께<br />맞춤형 학습을 시작하세요
             </p>
           </div>
         </div>
+      </div>
+
+      <div style={{
+        marginTop: '32px',
+        textAlign: 'center',
+        fontWeight: 'bold',
+        color: '#1e293b',
+        fontSize: '15px',
+        lineHeight: 1.6
+      }}>
+        <div>AI 튜터를 처음 방문하신 분은 'For Learners'를 클릭해 주세요</div>
+        <div>New to AI Tutor? Click 'For Learners'</div>
       </div>
 
       <div style={{ marginTop: '40px', fontSize: '12px', textAlign: 'center' }}>
