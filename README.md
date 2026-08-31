@@ -102,8 +102,8 @@ public/
 ## 📋 최근 작업 및 변경 이력 (Recent Updates)
 
 ### 2026-09-01
-- **학생 접속 화면 다운로드 안내 문구 수정**:
-  - 학생 대화 화면의 가이드 다운로드 안내 문구를 `📢 New to AI Tutor? Click the link to download`에서 `📢 New to AI Tutor? Click the link to download the guide`로 수정.
+- **학생 접속 화면 다운로드 안내 문구 시각성 개선**:
+  - 학생 대화 화면의 가이드 다운로드 안내 문구(`📢 New to AI Tutor?` 및 `Click the link to download the guide`)를 두 줄로 분리하고 폰트 크기 및 스타일 조정을 통해 가시성 및 가독성 향상.
 
 ### 2026-08-31
 - **학생 접속 화면 레이아웃 및 배너 재배치**:

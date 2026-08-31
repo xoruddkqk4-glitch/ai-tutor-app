@@ -650,8 +650,11 @@ export default function StudentChatInterface() {
                         <div style={{ fontSize: '16px', fontWeight: 600, color: '#1e3a8a', marginBottom: '12px', paddingBottom: '10px', borderBottom: '1px solid #bfdbfe' }}>
                             Open Class for Any Guest - <span style={{ color: '#2563eb', fontWeight: 700, fontSize: '18px' }}>272394</span>
                         </div>
-                        <div style={{ fontWeight: 800, fontSize: '14px', color: '#1e3a8a', marginBottom: '6px' }}>
-                            📢 New to AI Tutor? Click the link to download the guide
+                        <div style={{ fontWeight: 800, fontSize: '15px', color: '#1e3a8a', marginBottom: '4px' }}>
+                            📢 New to AI Tutor?
+                        </div>
+                        <div style={{ fontWeight: 700, fontSize: '14px', color: '#1e3a8a', marginBottom: '8px' }}>
+                            Click the link to download the guide
                         </div>
                         <a
                             href="http://tiny.cc/hongik-aitutor"
