@@ -44,6 +44,7 @@ export default function TeacherAdminPage() {
         examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: ''
     });
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+    const [passageType, setPassageType] = useState<'csat' | 'textbook'>('csat');
 
     // Settings
     const [apiKey, setApiKey] = useState('');
@@ -375,9 +376,9 @@ export default function TeacherAdminPage() {
             return;
         }
 
-        const logicFlowSaved = normalizeFlowStepsForSave(flowSteps);
-        if (logicFlowSaved.length === 0) {
-            alert('논리 흐름: 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
+        const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
+        if (passageType === 'csat' && logicFlowSaved.length === 0) {
+            alert('수능형 지문: 논리 흐름 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
             return;
         }
 
@@ -385,15 +386,17 @@ export default function TeacherAdminPage() {
             const q: Omit<Question, 'id'> = {
                 examCode: newQuestion.examCode!,
                 targetGrade: newQuestion.targetGrade ?? '',
-                topic: newQuestion.topic!,
+                topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
                 logicFlow: logicFlowSaved,
-                passage: newQuestion.passage!
+                passage: newQuestion.passage!,
+                passageType: passageType,
             };
 
             await createQuestion(q);
             await loadQuestions(); // 문항 목록 새로고침
             setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
             setFlowSteps([emptyFlowStep()]);  // flowSteps도 초기화
+            setPassageType('csat');
             alert('문항이 추가되었습니다.');
         } catch (error: any) {
             alert('문항 추가 실패: ' + error.message);
@@ -403,9 +406,9 @@ export default function TeacherAdminPage() {
     const handleUpdateQuestion = async () => {
         if (!editingQuestion) return;
 
-        const logicFlowSaved = normalizeFlowStepsForSave(flowSteps);
-        if (logicFlowSaved.length === 0) {
-            alert('논리 흐름: 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
+        const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
+        if (passageType === 'csat' && logicFlowSaved.length === 0) {
+            alert('수능형 지문: 논리 흐름 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
             return;
         }
 
@@ -413,9 +416,10 @@ export default function TeacherAdminPage() {
             const updates: Partial<Omit<Question, 'id'>> = {
                 examCode: newQuestion.examCode,
                 targetGrade: newQuestion.targetGrade ?? '',
-                topic: newQuestion.topic,
+                topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
                 logicFlow: logicFlowSaved,
-                passage: newQuestion.passage
+                passage: newQuestion.passage,
+                passageType: passageType,
             };
 
             await updateQuestion(editingQuestion.id, updates);
@@ -423,6 +427,7 @@ export default function TeacherAdminPage() {
             setEditingQuestion(null);
             setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
             setFlowSteps([emptyFlowStep()]);
+            setPassageType('csat');
             alert('문항이 수정되었습니다.');
         } catch (error: any) {
             alert('문항 수정 실패: ' + error.message);
@@ -622,12 +627,15 @@ export default function TeacherAdminPage() {
         // Use robust parsing for logicFlow
         const steps = safeParseLogicFlow(q.logicFlow);
         setFlowSteps(steps.length > 0 ? steps.map(s => ({ ...s, macroLabel: s.macroLabel ?? '' })) : [emptyFlowStep()]);
+        const pType = q.passageType || ((!q.topic && (!q.logicFlow || steps.length === 0)) ? 'textbook' : 'csat');
+        setPassageType(pType);
     };
 
     const handleCancelEdit = () => {
         setEditingQuestion(null);
         setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
         setFlowSteps([emptyFlowStep()]);
+        setPassageType('csat');
     };
 
     const handleSortColumn = (column: 'class' | 'number' | 'name' | 'competency') => {
@@ -1118,7 +1126,56 @@ export default function TeacherAdminPage() {
 
                         {/* Add Question Form */}
                         <div className="teacher-content-card">
-                            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '20px' }}>새 문항 추가</h2>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+                                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
+                                    {editingQuestion ? '문항 수정' : '새 문항 추가'}
+                                </h2>
+                                <div style={{
+                                    display: 'flex',
+                                    background: '#f1f5f9',
+                                    padding: '4px',
+                                    borderRadius: '10px',
+                                    gap: '4px',
+                                    border: '1px solid #cbd5e1'
+                                }}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPassageType('csat')}
+                                        style={{
+                                            padding: '6px 14px',
+                                            borderRadius: '7px',
+                                            fontSize: '13px',
+                                            fontWeight: '600',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            background: passageType === 'csat' ? '#2563eb' : 'transparent',
+                                            color: passageType === 'csat' ? 'white' : '#64748b',
+                                            boxShadow: passageType === 'csat' ? '0 2px 6px rgba(37, 99, 235, 0.3)' : 'none'
+                                        }}
+                                    >
+                                        수능형 지문
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setPassageType('textbook')}
+                                        style={{
+                                            padding: '6px 14px',
+                                            borderRadius: '7px',
+                                            fontSize: '13px',
+                                            fontWeight: '600',
+                                            border: 'none',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s',
+                                            background: passageType === 'textbook' ? '#2563eb' : 'transparent',
+                                            color: passageType === 'textbook' ? 'white' : '#64748b',
+                                            boxShadow: passageType === 'textbook' ? '0 2px 6px rgba(37, 99, 235, 0.3)' : 'none'
+                                        }}
+                                    >
+                                        교과서 지문
+                                    </button>
+                                </div>
+                            </div>
 
                             <div className="teacher-grid-2">
                                 <div className="teacher-input-group">
@@ -1144,23 +1201,48 @@ export default function TeacherAdminPage() {
                                 </div>
                             </div>
 
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">주제</label>
+                            <div className="teacher-input-group" style={{ opacity: passageType === 'textbook' ? 0.6 : 1 }}>
+                                <label className="teacher-input-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    주제
+                                    {passageType === 'textbook' && (
+                                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'normal' }}>
+                                            (교과서 지문 선택 시 비활성화)
+                                        </span>
+                                    )}
+                                </label>
                                 <input
                                     type="text"
                                     className="teacher-input-field"
-                                    placeholder="예: 환경 보호의 시급성"
-                                    value={newQuestion.topic || ''}
+                                    placeholder={passageType === 'textbook' ? '교과서 지문 선택 시 비활성화됩니다' : '예: 환경 보호의 시급성'}
+                                    value={passageType === 'textbook' ? '' : (newQuestion.topic || '')}
                                     onChange={e => setNewQuestion({ ...newQuestion, topic: e.target.value })}
+                                    disabled={passageType === 'textbook'}
+                                    style={{
+                                        background: passageType === 'textbook' ? '#f1f5f9' : 'white',
+                                        cursor: passageType === 'textbook' ? 'not-allowed' : 'text'
+                                    }}
                                 />
                             </div>
 
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">논리 흐름 (순서대로 입력)</label>
-                                <div className="teacher-alert-info" style={{ marginBottom: '10px', fontSize: '12px' }}>
-                                    <strong>큰 범주(필수):</strong> 각 행마다 입력합니다. <strong>연속된 행</strong>에 같은 큰 범주를 넣으면 한 덩어리로 묶여, Step 1 추천 질문 초반에 거시 구조로 쓰입니다(예: 두 행 모두 &quot;설명&quot;). <strong>작은 범주는 선택</strong>입니다.
-                                </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div className="teacher-input-group" style={{ opacity: passageType === 'textbook' ? 0.6 : 1 }}>
+                                <label className="teacher-input-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    논리 흐름 (순서대로 입력)
+                                    {passageType === 'textbook' && (
+                                        <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 'normal' }}>
+                                            (교과서 지문 선택 시 비활성화)
+                                        </span>
+                                    )}
+                                </label>
+                                {passageType === 'textbook' ? (
+                                    <div className="teacher-alert-info" style={{ marginBottom: '10px', fontSize: '12px', background: '#f1f5f9', color: '#64748b', borderColor: '#cbd5e1' }}>
+                                        ℹ️ 교과서 지문은 &apos;우리말 주제&apos; 및 &apos;논리 흐름&apos; 없이 지문 본문으로만 대화 학습을 진행합니다.
+                                    </div>
+                                ) : (
+                                    <div className="teacher-alert-info" style={{ marginBottom: '10px', fontSize: '12px' }}>
+                                        <strong>큰 범주(필수):</strong> 각 행마다 입력합니다. <strong>연속된 행</strong>에 같은 큰 범주를 넣으면 한 덩어리로 묶여, Step 1 추천 질문 초반에 거시 구조로 쓰입니다(예: 두 행 모두 &quot;설명&quot;). <strong>작은 범주는 선택</strong>입니다.
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: passageType === 'textbook' ? 'none' : 'auto' }}>
                                     {/* Header with Examples */}
                                     <div style={{ display: 'flex', gap: '8px', paddingLeft: '32px', marginBottom: '-4px' }}>
                                         <div style={{ flex: '0.95', fontSize: '11px', color: '#000', textAlign: 'center' }}>큰 범주 (필수)<br />ex) 도입, 주제, 설명, 구체적 설명, 결론</div>
@@ -1174,7 +1256,7 @@ export default function TeacherAdminPage() {
                                         <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                             <div style={{
                                                 width: '24px', height: '24px',
-                                                borderRadius: '50%', background: '#3b82f6',
+                                                borderRadius: '50%', background: passageType === 'textbook' ? '#94a3b8' : '#3b82f6',
                                                 color: 'white', display: 'flex',
                                                 alignItems: 'center', justifyContent: 'center',
                                                 fontSize: '12px', fontWeight: 'bold',
@@ -1188,13 +1270,14 @@ export default function TeacherAdminPage() {
                                                 type="text"
                                                 className="teacher-input-field"
                                                 placeholder="예: 주제, 설명, 결론"
-                                                value={step.macroLabel ?? ''}
+                                                value={passageType === 'textbook' ? '' : (step.macroLabel ?? '')}
                                                 onChange={(e) => {
                                                     const newSteps = [...flowSteps];
                                                     newSteps[index] = { ...newSteps[index], macroLabel: e.target.value };
                                                     setFlowSteps(newSteps);
                                                 }}
-                                                style={{ flex: '0.95' }}
+                                                disabled={passageType === 'textbook'}
+                                                style={{ flex: '0.95', background: passageType === 'textbook' ? '#f1f5f9' : 'white' }}
                                             />
 
                                             {/* 작은 범주 (선택) */}
@@ -1202,13 +1285,14 @@ export default function TeacherAdminPage() {
                                                 type="text"
                                                 className="teacher-input-field"
                                                 placeholder="작은 범주 (선택)"
-                                                value={step.role}
+                                                value={passageType === 'textbook' ? '' : step.role}
                                                 onChange={(e) => {
                                                     const newSteps = [...flowSteps];
                                                     newSteps[index] = { ...newSteps[index], role: e.target.value };
                                                     setFlowSteps(newSteps);
                                                 }}
-                                                style={{ flex: '1.15' }}
+                                                disabled={passageType === 'textbook'}
+                                                style={{ flex: '1.15', background: passageType === 'textbook' ? '#f1f5f9' : 'white' }}
                                             />
 
                                             {/* Conjunction */}
@@ -1216,13 +1300,14 @@ export default function TeacherAdminPage() {
                                                 type="text"
                                                 className="teacher-input-field"
                                                 placeholder="연결어"
-                                                value={step.conjunction}
+                                                value={passageType === 'textbook' ? '' : step.conjunction}
                                                 onChange={(e) => {
                                                     const newSteps = [...flowSteps];
                                                     newSteps[index] = { ...newSteps[index], conjunction: e.target.value };
                                                     setFlowSteps(newSteps);
                                                 }}
-                                                style={{ flex: '1' }}
+                                                disabled={passageType === 'textbook'}
+                                                style={{ flex: '1', background: passageType === 'textbook' ? '#f1f5f9' : 'white' }}
                                             />
 
                                             {/* Content */}
@@ -1230,7 +1315,7 @@ export default function TeacherAdminPage() {
                                                 type="text"
                                                 className="teacher-input-field"
                                                 placeholder="중심 의미"
-                                                value={step.content}
+                                                value={passageType === 'textbook' ? '' : step.content}
                                                 onChange={(e) => {
                                                     const newSteps = [...flowSteps];
                                                     newSteps[index] = { ...newSteps[index], content: e.target.value };
@@ -1244,7 +1329,8 @@ export default function TeacherAdminPage() {
                                                         setFlowSteps(newSteps);
                                                     }
                                                 }}
-                                                style={{ flex: '2' }}
+                                                disabled={passageType === 'textbook'}
+                                                style={{ flex: '2', background: passageType === 'textbook' ? '#f1f5f9' : 'white' }}
                                             />
 
                                             <button
@@ -1252,6 +1338,7 @@ export default function TeacherAdminPage() {
                                                     const newSteps = flowSteps.filter((_, i) => i !== index);
                                                     setFlowSteps(newSteps.length ? newSteps : [emptyFlowStep()]);
                                                 }}
+                                                disabled={passageType === 'textbook'}
                                                 className="teacher-button-secondary"
                                                 style={{ padding: '8px', color: '#ef4444', borderColor: '#fee2e2' }}
                                                 title="삭제"
@@ -1262,6 +1349,7 @@ export default function TeacherAdminPage() {
                                     ))}
                                     <button
                                         onClick={() => setFlowSteps([...flowSteps, emptyFlowStep()])}
+                                        disabled={passageType === 'textbook'}
                                         className="teacher-button-secondary"
                                         style={{ alignSelf: 'start', marginTop: '4px' }}
                                     >

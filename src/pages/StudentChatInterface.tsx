@@ -43,6 +43,16 @@ function getFlatFAQIndex(): { text: string; isSentenceModal: boolean }[] {
 }
 const FLAT_FAQ = getFlatFAQIndex();
 
+function isTextbookPassage(q: Question | null): boolean {
+    if (!q) return false;
+    if (q.passageType === 'textbook') return true;
+    if (q.passageType === 'csat') return false;
+    const hasTopic = Boolean(q.topic && q.topic.trim());
+    const parsedFlow = safeParseLogicFlow(q.logicFlow);
+    const hasFlow = parsedFlow.length > 0;
+    return !hasTopic && !hasFlow;
+}
+
 function buildSocraticStrictForPartCount(partCount: number, repeatNotice: string): string {
     return `\n\n[답변 방식 - 절대 준수 사항]\n너는 교사가 제공한 데이터(우리말 주제, 논리 흐름)의 정답을 이미 알고 있는 튜터야. 하지만 학생은 정답을 모르는 상태야. 너의 역할은 학생이 스스로 정답을 찾아낼 수 있도록 유도하는 것이야.\n\n[최우선 규칙 - 교사 데이터 절대 준수 (STRICT ENFORCEMENT)]\n★ 이 지문이 너의 사견으로 '나눌 부분이 없다'거나 '하나의 흐름이다'라고 판단되더라도, 절대 그렇게 답변하지 마세요. 이는 중대한 오류로 간주됩니다.\n★ 반드시 교사가 설정한 ${partCount}부분 구조가 존재한다고 전제하고 답변하세요.\n★ 네가 지문을 자체적으로 분석해서 다른 부분 수나 다른 구조를 만들어내면 절대 안 돼.\n★ 교사 데이터가 ${partCount}부분이면 반드시 '${partCount}부분'으로 답변해야 해. (구조가 모호하다거나 하나라고 답하지 마)\n★ 네 자체 판단을 교사 데이터보다 우선시하지 마.\n\n기타 규칙:\n1. 교사 데이터의 정답을 직접 말하지 마 (4단계 제외).\n2. 학생이 정답에 접근하도록 지문의 특정 부분을 짚어주거나 유도 질문을 던져.\n3. 위의 [힌트 수준] 지시를 반드시 따라. 각 단계의 구체성 수준을 정확히 지켜.${repeatNotice}`;
 }
@@ -300,6 +310,13 @@ export default function StudentChatInterface() {
 
         const faqEntry = FLAT_FAQ[index];
         if (!faqEntry) return;
+
+        if (isTextbookPassage(selectedQuestion)) {
+            if (faqEntry.text.includes('우리말 주제') || faqEntry.text.includes('나눈다면') || faqEntry.text.includes('중심 내용과 논리적') || faqEntry.text.includes('영어 연결어')) {
+                alert('교과서 지문에서는 이용할 수 없는 질문입니다.');
+                return;
+            }
+        }
 
         if (faqEntry.isSentenceModal) {
             setShowSentenceModal(true);
@@ -812,44 +829,69 @@ export default function StudentChatInterface() {
                         <div className="sc-faq-list" style={{ gap: '6px' }}>
                             {(() => {
                                 let flatIndex = 0;
+                                const isTextbook = isTextbookPassage(selectedQuestion);
                                 return FAQ_ITEMS.map((item, itemIdx) => {
                                     if (item.type === 'single') {
                                         const idx = flatIndex++;
+                                        const isTopicQuestion = item.text.includes('우리말 주제');
+                                        const isDisabled = isTopicQuestion && isTextbook;
                                         return (
-                                            <button key={itemIdx} className="sc-faq-item" onClick={() => handleFAQClick(idx)} style={{ padding: '8px 12px', fontSize: '12px' }}>
+                                            <button
+                                                key={itemIdx}
+                                                className="sc-faq-item"
+                                                disabled={isDisabled}
+                                                onClick={() => !isDisabled && handleFAQClick(idx)}
+                                                style={{
+                                                    padding: '8px 12px',
+                                                    fontSize: '12px',
+                                                    opacity: isDisabled ? 0.5 : 1,
+                                                    cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                                    background: isDisabled ? '#f1f5f9' : undefined,
+                                                    color: isDisabled ? '#94a3b8' : undefined,
+                                                    borderColor: isDisabled ? '#cbd5e1' : undefined
+                                                }}
+                                            >
                                                 {item.text}
+                                                {isDisabled && <span style={{ fontSize: '10px', marginLeft: '6px', color: '#94a3b8', fontWeight: 'normal' }}>(교과서 지문 미지원)</span>}
                                             </button>
                                         );
                                     } else {
                                         const groupStartIdx = flatIndex;
                                         flatIndex += item.items.length;
+                                        const isLogicFlowGroup = item.label.includes('논리적 흐름');
+                                        const isDisabled = isLogicFlowGroup && isTextbook;
                                         return (
                                             <div key={itemIdx} style={{
-                                                background: '#e8f5e9',
-                                                border: '1.5px solid #81c784',
+                                                background: isDisabled ? '#f8fafc' : '#e8f5e9',
+                                                border: isDisabled ? '1.5px solid #cbd5e1' : '1.5px solid #81c784',
                                                 borderRadius: '10px',
                                                 padding: '10px',
                                                 display: 'flex',
                                                 flexDirection: 'column',
-                                                gap: '5px'
+                                                gap: '5px',
+                                                opacity: isDisabled ? 0.55 : 1
                                             }}>
-                                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#2e7d32', marginBottom: '2px', textAlign: 'left' }}>
+                                                <div style={{ fontSize: '12px', fontWeight: 'bold', color: isDisabled ? '#94a3b8' : '#2e7d32', marginBottom: '2px', textAlign: 'left' }}>
                                                     {item.label}
+                                                    {isDisabled && <span style={{ fontSize: '10px', marginLeft: '6px', color: '#94a3b8', fontWeight: 'normal' }}>(교과서 지문 미지원)</span>}
                                                 </div>
                                                 {item.items.map((sub, subIdx) => (
                                                     <button
                                                         key={subIdx}
                                                         className="sc-faq-item"
-                                                        onClick={() => handleFAQClick(groupStartIdx + subIdx)}
+                                                        disabled={isDisabled}
+                                                        onClick={() => !isDisabled && handleFAQClick(groupStartIdx + subIdx)}
                                                         style={{
                                                             padding: '7px 10px',
                                                             fontSize: '12px',
-                                                            background: '#f1f8e9',
-                                                            border: '1px solid #a5d6a7',
+                                                            background: isDisabled ? '#f1f5f9' : '#f1f8e9',
+                                                            border: isDisabled ? '1px solid #e2e8f0' : '1px solid #a5d6a7',
+                                                            color: isDisabled ? '#94a3b8' : undefined,
+                                                            cursor: isDisabled ? 'not-allowed' : 'pointer',
                                                             textAlign: 'left'
                                                         }}
                                                     >
-                                                        <span style={{ fontWeight: 'bold', color: '#2e7d32', marginRight: '6px' }}>Step {subIdx + 1}.</span>
+                                                        <span style={{ fontWeight: 'bold', color: isDisabled ? '#94a3b8' : '#2e7d32', marginRight: '6px' }}>Step {subIdx + 1}.</span>
                                                         {sub}
                                                     </button>
                                                 ))}

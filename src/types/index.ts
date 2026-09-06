@@ -22,6 +22,8 @@ export type LogicFlowStep = {
   content: string;
 };
 
+export type PassageType = 'csat' | 'textbook';
+
 export type Question = {
   id: number;
   /** UI: 문항 번호 */
@@ -31,6 +33,7 @@ export type Question = {
   topic: string;
   logicFlow?: string | string[] | LogicFlowStep[];
   passage: string;
+  passageType?: PassageType;
 };
 
 export type Room = {
