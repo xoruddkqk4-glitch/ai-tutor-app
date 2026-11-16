@@ -38,10 +38,20 @@ export type PassageType = 'csat' | 'textbook';
 
 export type Question = {
   id: number;
-  /** UI: 문항 번호 */
+  /** UI: 문항 번호 (DB exam_code 호환) */
   examCode: string;
-  /** UI: 출처 (DB 필드명은 기존 유지) */
+  /** UI: 통합 출처 문자열 (DB target_grade 호환) */
   targetGrade?: string;
+  /** 분리된 출처: 년도 (예: "2025") */
+  sourceYear?: string;
+  /** 분리된 출처: 학년 (예: "고2") */
+  sourceGrade?: string;
+  /** 분리된 출처: 월/시기 (예: "9월", "수능", 또는 교과서 단원명) */
+  sourceMonth?: string;
+  /** 분리된 출처: 문항 번호 (examCode와 동기화, 예: "29번") */
+  questionNumber?: string;
+  /** 문항 태그 배열 */
+  tags?: string[];
   topic: string;
   logicFlow?: string | string[] | LogicFlowStep[];
   passage: string;

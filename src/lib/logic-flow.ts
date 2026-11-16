@@ -1,4 +1,79 @@
-import type { LogicFlowStep } from '../types';
+import type { LogicFlowStep, PassageType } from '../types';
+
+export interface QuestionEmbeddedMeta {
+    __meta: true;
+    tags?: string[];
+    sourceYear?: string;
+    sourceGrade?: string;
+    sourceMonth?: string;
+    questionNumber?: string;
+    passageType?: PassageType;
+}
+
+export function isEmbeddedMetaItem(item: unknown): item is QuestionEmbeddedMeta {
+    return (
+        typeof item === 'object' &&
+        item !== null &&
+        '__meta' in item &&
+        (item as { __meta?: unknown }).__meta === true
+    );
+}
+
+/**
+ * DB에 신규 컬럼이 없을 때 logic_flow JSON 배열 끝에 저장한 메타 정보를 추출합니다.
+ */
+export function extractEmbeddedQuestionMeta(logicFlow: unknown): QuestionEmbeddedMeta | null {
+    if (!logicFlow) return null;
+
+    let items: unknown[] | null = null;
+    if (Array.isArray(logicFlow)) {
+        items = logicFlow;
+    } else if (typeof logicFlow === 'string') {
+        const trimmed = logicFlow.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+            try {
+                const parsed = JSON.parse(trimmed);
+                if (Array.isArray(parsed)) items = parsed;
+            } catch {
+                items = null;
+            }
+        }
+    }
+
+    if (!items) return null;
+    for (const item of items) {
+        if (isEmbeddedMetaItem(item)) {
+            return item;
+        }
+    }
+    return null;
+}
+
+/**
+ * logic_flow 배열에 메타 엔트리를 덧붙여 폴백 저장용 배열을 생성합니다.
+ */
+export function attachEmbeddedQuestionMeta(
+    steps: LogicFlowStep[],
+    meta: Omit<QuestionEmbeddedMeta, '__meta'>
+): unknown[] {
+    const cleanMeta: QuestionEmbeddedMeta = { __meta: true };
+    if (meta.tags && meta.tags.length > 0) cleanMeta.tags = meta.tags;
+    if (meta.sourceYear) cleanMeta.sourceYear = meta.sourceYear;
+    if (meta.sourceGrade) cleanMeta.sourceGrade = meta.sourceGrade;
+    if (meta.sourceMonth) cleanMeta.sourceMonth = meta.sourceMonth;
+    if (meta.questionNumber) cleanMeta.questionNumber = meta.questionNumber;
+    if (meta.passageType) cleanMeta.passageType = meta.passageType;
+
+    const hasMetaFields =
+        Boolean(cleanMeta.tags?.length) ||
+        Boolean(cleanMeta.sourceYear) ||
+        Boolean(cleanMeta.sourceGrade) ||
+        Boolean(cleanMeta.sourceMonth) ||
+        Boolean(cleanMeta.questionNumber) ||
+        Boolean(cleanMeta.passageType);
+
+    return hasMetaFields ? [...steps, cleanMeta] : [...steps];
+}
 
 /**
  * DB/JSON 등에서 논리 흐름을 LogicFlowStep 배열로 정규화합니다.
@@ -8,18 +83,22 @@ export function safeParseLogicFlow(logicFlow: unknown): LogicFlowStep[] {
 
     let steps: unknown[] = [];
     if (Array.isArray(logicFlow)) {
-        steps = logicFlow;
+        steps = logicFlow.filter(item => !isEmbeddedMetaItem(item));
     } else {
         const trimmed = String(logicFlow).trim();
+        let isJsonArray = false;
         if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
             try {
                 const parsed = JSON.parse(trimmed);
-                if (Array.isArray(parsed)) steps = parsed;
+                if (Array.isArray(parsed)) {
+                    isJsonArray = true;
+                    steps = parsed.filter(item => !isEmbeddedMetaItem(item));
+                }
             } catch (e) {
                 console.error('JSON parse failed for logicFlow:', e);
             }
         }
-        if (steps.length === 0 && trimmed) {
+        if (!isJsonArray && steps.length === 0 && trimmed) {
             steps = trimmed.split(/\r?\n| -> /).filter(s => s.trim());
         }
     }
@@ -126,6 +205,9 @@ export function isTextbookQuestion(
     if (!q) return false;
     if (q.passageType === 'textbook') return true;
     if (q.passageType === 'csat') return false;
+    const embeddedType = extractEmbeddedQuestionMeta(q.logicFlow)?.passageType;
+    if (embeddedType === 'textbook') return true;
+    if (embeddedType === 'csat') return false;
     const hasTopic = Boolean(q.topic && q.topic.trim());
     const hasFlow = safeParseLogicFlow(q.logicFlow).length > 0;
     return !hasTopic && !hasFlow;

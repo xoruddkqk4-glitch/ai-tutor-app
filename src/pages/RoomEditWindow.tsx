@@ -4,6 +4,7 @@ import { getStudents } from '../lib/students';
 import { getRoomById, updateRoom, getRoomQuestionIds, createRoom } from '../lib/rooms';
 import { getErrorMessage } from '../lib/errors';
 import { isTextbookQuestion, summarizeLogicFlow } from '../lib/logic-flow';
+import { formatSourceSummary, getTagCategory, normalizeTags, parseQuestionSource } from '../lib/question-meta';
 import type { Room, Question } from '../types';
 import { Save, Loader2, X } from 'lucide-react';
 
@@ -142,6 +143,8 @@ export default function RoomEditWindow() {
                 <div style={{ maxHeight: 'calc(100vh - 250px)', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '10px', padding: '12px' }}>
                     {questions.map(q => {
                         const isTextbook = isTextbookQuestion(q);
+                        const sourceText = formatSourceSummary(parseQuestionSource(q)) || q.targetGrade || '-';
+                        const tags = normalizeTags(q.tags);
                         return (
                             <div
                                 key={q.id}
@@ -182,8 +185,24 @@ export default function RoomEditWindow() {
                                         <span>{q.topic || (isTextbook ? '(교과서 지문)' : '(주제 미입력)')}</span>
                                     </div>
                                     <div style={{ fontSize: '12px', color: '#666' }}>
-                                        출처: {q.targetGrade || '-'} • {summarizeLogicFlow(q.logicFlow, isTextbook)}
+                                        출처: {sourceText} • {summarizeLogicFlow(q.logicFlow, isTextbook)}
                                     </div>
+                                    {tags.length > 0 && (
+                                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                                            {tags.map(tag => {
+                                                const category = getTagCategory(tag);
+                                                return (
+                                                    <span
+                                                        key={tag}
+                                                        className={`teacher-card-tag ${category}`}
+                                                        style={{ cursor: 'default' }}
+                                                    >
+                                                        #{tag}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );

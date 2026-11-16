@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     LayoutDashboard, Users, BookOpen, Settings, Plus, Save,
-    Trash2, Upload, FileText, CheckCircle, Play, Pause, LogOut, Edit
+    Trash2, Upload, FileText, CheckCircle, Play, Pause, LogOut, Edit,
+    Search, Tag, X, RotateCcw
 } from 'lucide-react';
 import type { Question, Room, LogicFlowStep } from '../types';
 import { signIn, signUp, signOut, getCurrentUser, resetPassword } from '../lib/auth';
@@ -12,9 +13,39 @@ import { getRooms, deleteRoom, toggleRoomStatus } from '../lib/rooms';
 
 import { getTeacherSettings, updateTeacherSettings, getAppConfig, updateAppConfig, getAllTeachers, toggleTeacherActive, updateTeacherMaxQuestions, deleteTeacher, type TeacherRecord } from '../lib/settings';
 import { safeParseLogicFlow, normalizeFlowStepsForSave, isTextbookQuestion } from '../lib/logic-flow';
+import {
+    PRIMARY_QUESTION_TAGS,
+    SECONDARY_QUESTION_TAGS,
+    GRADE_PRESETS,
+    MONTH_PRESETS,
+    getYearPresets,
+    normalizeYear,
+    normalizeGrade,
+    normalizeMonth,
+    normalizeTags,
+    getTagCategory,
+    parseQuestionSource,
+    formatSourceSummary,
+    matchesQuestionNumberFilter,
+    loadSavedCustomTags,
+    saveCustomTagsToStorage,
+} from '../lib/question-meta';
 import { getErrorMessage } from '../lib/errors';
 
 type TeacherRole = 'master' | 'regular';
+
+const emptyQuestionForm = (): Partial<Question> => ({
+    examCode: '',
+    questionNumber: '',
+    targetGrade: '',
+    sourceYear: '',
+    sourceGrade: '',
+    sourceMonth: '',
+    tags: [],
+    topic: '',
+    logicFlow: '',
+    passage: '',
+});
 
 export default function TeacherAdminPage() {
     // --- State ---
@@ -41,11 +72,26 @@ export default function TeacherAdminPage() {
     const [parsedStudents, setParsedStudents] = useState<{ class: string, number: string, name: string, competency: string }[]>([]);
     const [savedStudents, setSavedStudents] = useState<Student[]>([]);
 
-    const [newQuestion, setNewQuestion] = useState<Partial<Question>>({
-        examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: ''
-    });
+    const [newQuestion, setNewQuestion] = useState<Partial<Question>>(emptyQuestionForm);
     const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
     const [passageType, setPassageType] = useState<'csat' | 'textbook'>('csat');
+    const [customYearMode, setCustomYearMode] = useState(false);
+    const [customGradeMode, setCustomGradeMode] = useState(false);
+    const [customMonthMode, setCustomMonthMode] = useState(false);
+    const [customTagInput, setCustomTagInput] = useState('');
+    const [customTagTick, setCustomTagTick] = useState(0);
+
+    // Materials Search & Filter States
+    const [filterYear, setFilterYear] = useState('');
+    const [filterGrade, setFilterGrade] = useState('');
+    const [filterMonth, setFilterMonth] = useState('');
+    const [filterNumber, setFilterNumber] = useState('');
+    const [filterKeyword, setFilterKeyword] = useState('');
+    const [filterPassageType, setFilterPassageType] = useState<'all' | 'csat' | 'textbook'>('all');
+    const [filterTags, setFilterTags] = useState<string[]>([]);
+    const [filterTagMode, setFilterTagMode] = useState<'and' | 'or'>('and');
+
+    const formCardRef = useRef<HTMLDivElement>(null);
 
     // Settings
     const [apiKey, setApiKey] = useState('');
@@ -266,6 +312,216 @@ export default function TeacherAdminPage() {
         }
     };
 
+    const yearPresets = useMemo(() => getYearPresets(), []);
+
+    const storedCustomTags = useMemo(() => {
+        void customTagTick;
+        return loadSavedCustomTags(teacherId);
+    }, [teacherId, customTagTick]);
+
+    const customTagPool = useMemo(() => {
+        const merged: string[] = [...storedCustomTags];
+        const pushIfCustom = (tag: string) => {
+            if (getTagCategory(tag) === 'custom' && !merged.includes(tag)) {
+                merged.push(tag);
+            }
+        };
+        for (const q of questions) {
+            for (const tag of normalizeTags(q.tags)) {
+                pushIfCustom(tag);
+            }
+        }
+        for (const tag of normalizeTags(newQuestion.tags)) {
+            pushIfCustom(tag);
+        }
+        return merged;
+    }, [storedCustomTags, questions, newQuestion.tags]);
+
+    const questionEntries = useMemo(() => {
+        return questions.map((q) => {
+            const source = parseQuestionSource(q);
+            const tags = normalizeTags(q.tags);
+            const isTextbook = isTextbookQuestion(q);
+            return { q, source, tags, isTextbook };
+        });
+    }, [questions]);
+
+    const {
+        yearCounts,
+        gradeCounts,
+        monthCounts,
+        tagCounts,
+        availableFilterYears,
+        availableFilterGrades,
+        availableFilterMonths,
+        filterCustomTags,
+    } = useMemo(() => {
+        const yCounts = new Map<string, number>();
+        const gCounts = new Map<string, number>();
+        const mCounts = new Map<string, number>();
+        const tCounts = new Map<string, number>();
+
+        for (const { source, tags } of questionEntries) {
+            if (source.sourceYear) yCounts.set(source.sourceYear, (yCounts.get(source.sourceYear) ?? 0) + 1);
+            if (source.sourceGrade) gCounts.set(source.sourceGrade, (gCounts.get(source.sourceGrade) ?? 0) + 1);
+            if (source.sourceMonth) mCounts.set(source.sourceMonth, (mCounts.get(source.sourceMonth) ?? 0) + 1);
+            for (const tag of tags) {
+                tCounts.set(tag, (tCounts.get(tag) ?? 0) + 1);
+            }
+        }
+
+        const yearSet = new Set<string>([...yearPresets, ...yCounts.keys()]);
+        const years = Array.from(yearSet).sort((a, b) => {
+            const aNum = /^\d{4}$/.test(a) ? Number(a) : -1;
+            const bNum = /^\d{4}$/.test(b) ? Number(b) : -1;
+            if (aNum !== bNum) return bNum - aNum;
+            return a.localeCompare(b, 'ko');
+        });
+
+        const gradeSet = new Set<string>([...GRADE_PRESETS, ...gCounts.keys()]);
+        const grades = Array.from(gradeSet);
+
+        const monthSet = new Set<string>([...MONTH_PRESETS, ...mCounts.keys()]);
+        const months = Array.from(monthSet);
+
+        const customSet = new Set<string>(storedCustomTags);
+        for (const tag of tCounts.keys()) {
+            if (getTagCategory(tag) === 'custom') customSet.add(tag);
+        }
+        for (const tag of filterTags) {
+            if (getTagCategory(tag) === 'custom') customSet.add(tag);
+        }
+
+        return {
+            yearCounts: yCounts,
+            gradeCounts: gCounts,
+            monthCounts: mCounts,
+            tagCounts: tCounts,
+            availableFilterYears: years,
+            availableFilterGrades: grades,
+            availableFilterMonths: months,
+            filterCustomTags: Array.from(customSet),
+        };
+    }, [questionEntries, yearPresets, storedCustomTags, filterTags]);
+
+    const filteredEntries = useMemo(() => {
+        const kw = filterKeyword.trim().toLowerCase();
+        return questionEntries.filter(({ q, source, tags, isTextbook }) => {
+            if (filterPassageType === 'csat' && isTextbook) return false;
+            if (filterPassageType === 'textbook' && !isTextbook) return false;
+            if (filterYear && source.sourceYear !== filterYear) return false;
+            if (filterGrade && source.sourceGrade !== filterGrade) return false;
+            if (filterMonth && source.sourceMonth !== filterMonth) return false;
+            if (filterNumber.trim() && !matchesQuestionNumberFilter(source.questionNumber || q.examCode, filterNumber)) {
+                return false;
+            }
+            if (filterTags.length > 0) {
+                if (filterTagMode === 'and') {
+                    if (!filterTags.every(tag => tags.includes(tag))) return false;
+                } else {
+                    if (!filterTags.some(tag => tags.includes(tag))) return false;
+                }
+            }
+            if (kw) {
+                const haystack = [
+                    q.examCode,
+                    q.targetGrade ?? '',
+                    source.sourceYear,
+                    source.sourceGrade,
+                    source.sourceMonth,
+                    q.topic,
+                    q.passage,
+                    ...tags,
+                ]
+                    .join(' ')
+                    .toLowerCase();
+                if (!haystack.includes(kw)) return false;
+            }
+            return true;
+        });
+    }, [
+        questionEntries,
+        filterPassageType,
+        filterYear,
+        filterGrade,
+        filterMonth,
+        filterNumber,
+        filterTags,
+        filterTagMode,
+        filterKeyword,
+    ]);
+
+    const hasActiveQuestionFilter = Boolean(
+        filterYear ||
+        filterGrade ||
+        filterMonth ||
+        filterNumber.trim() ||
+        filterKeyword.trim() ||
+        filterPassageType !== 'all' ||
+        filterTags.length > 0
+    );
+
+    const resetQuestionForm = () => {
+        setEditingQuestion(null);
+        setNewQuestion(emptyQuestionForm());
+        setFlowSteps([emptyFlowStep()]);
+        setPassageType('csat');
+        setCustomYearMode(false);
+        setCustomGradeMode(false);
+        setCustomMonthMode(false);
+        setCustomTagInput('');
+    };
+
+    const resetQuestionFilters = () => {
+        setFilterYear('');
+        setFilterGrade('');
+        setFilterMonth('');
+        setFilterNumber('');
+        setFilterKeyword('');
+        setFilterPassageType('all');
+        setFilterTags([]);
+    };
+
+    const handleToggleFormTag = (tag: string) => {
+        const current = normalizeTags(newQuestion.tags);
+        const next = current.includes(tag)
+            ? current.filter(t => t !== tag)
+            : [...current, tag];
+        setNewQuestion(prev => ({ ...prev, tags: next }));
+    };
+
+    const handleAddCustomTags = () => {
+        const parsed = normalizeTags(customTagInput);
+        if (parsed.length === 0) return;
+
+        const currentTags = normalizeTags(newQuestion.tags);
+        const nextTags = normalizeTags([...currentTags, ...parsed]);
+        setNewQuestion(prev => ({ ...prev, tags: nextTags }));
+
+        const newCustom = parsed.filter(t => getTagCategory(t) === 'custom');
+        if (newCustom.length > 0) {
+            saveCustomTagsToStorage(teacherId, [...storedCustomTags, ...newCustom]);
+            setCustomTagTick(t => t + 1);
+        }
+        setCustomTagInput('');
+    };
+
+    const handleRemoveCustomTag = (tag: string) => {
+        const nextStored = storedCustomTags.filter(t => t !== tag);
+        saveCustomTagsToStorage(teacherId, nextStored);
+        setCustomTagTick(t => t + 1);
+        setNewQuestion(prev => ({
+            ...prev,
+            tags: normalizeTags(prev.tags).filter(t => t !== tag),
+        }));
+    };
+
+    const handleToggleFilterTag = (tag: string) => {
+        setFilterTags(prev =>
+            prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+        );
+    };
+
     const handleLogout = async () => {
         try {
             await signOut();
@@ -291,10 +547,10 @@ export default function TeacherAdminPage() {
             setBulkStudentText('');
             setTeacherList([]);
 
-            // Clear editing state
-            setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-            setEditingQuestion(null);
-            setFlowSteps([emptyFlowStep()]);
+            // Clear editing & filter states
+            resetQuestionForm();
+            resetQuestionFilters();
+            setFilterTagMode('and');
 
             // Reset Limits
             setMaxQuestionsLimit(50);
@@ -393,7 +649,8 @@ export default function TeacherAdminPage() {
             return;
         }
 
-        if (!newQuestion.examCode || !newQuestion.passage) {
+        const questionNumber = (newQuestion.questionNumber || newQuestion.examCode || '').trim();
+        if (!questionNumber || !newQuestion.passage?.trim()) {
             alert('문항 번호와 본문은 필수입니다.');
             return;
         }
@@ -404,21 +661,30 @@ export default function TeacherAdminPage() {
             return;
         }
 
+        const sourceYear = normalizeYear(newQuestion.sourceYear);
+        const sourceGrade = normalizeGrade(newQuestion.sourceGrade);
+        const sourceMonth = normalizeMonth(newQuestion.sourceMonth);
+        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth });
+        const tags = normalizeTags(newQuestion.tags);
+
         try {
             const q: Omit<Question, 'id'> = {
-                examCode: newQuestion.examCode!,
-                targetGrade: newQuestion.targetGrade ?? '',
+                examCode: questionNumber,
+                questionNumber,
+                targetGrade,
+                sourceYear,
+                sourceGrade,
+                sourceMonth,
+                tags,
                 topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
                 logicFlow: logicFlowSaved,
-                passage: newQuestion.passage!,
+                passage: newQuestion.passage,
                 passageType: passageType,
             };
 
             await createQuestion(q);
             await loadQuestions(); // 문항 목록 새로고침
-            setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-            setFlowSteps([emptyFlowStep()]);  // flowSteps도 초기화
-            setPassageType('csat');
+            resetQuestionForm();
             alert('문항이 추가되었습니다.');
         } catch (error: unknown) {
             alert('문항 추가 실패: ' + getErrorMessage(error));
@@ -428,16 +694,33 @@ export default function TeacherAdminPage() {
     const handleUpdateQuestion = async () => {
         if (!editingQuestion) return;
 
+        const questionNumber = (newQuestion.questionNumber || newQuestion.examCode || '').trim();
+        if (!questionNumber || !newQuestion.passage?.trim()) {
+            alert('문항 번호와 본문은 필수입니다.');
+            return;
+        }
+
         const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
         if (passageType === 'csat' && logicFlowSaved.length === 0) {
             alert('수능형 지문: 논리 흐름 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
             return;
         }
 
+        const sourceYear = normalizeYear(newQuestion.sourceYear);
+        const sourceGrade = normalizeGrade(newQuestion.sourceGrade);
+        const sourceMonth = normalizeMonth(newQuestion.sourceMonth);
+        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth });
+        const tags = normalizeTags(newQuestion.tags);
+
         try {
             const updates: Partial<Omit<Question, 'id'>> = {
-                examCode: newQuestion.examCode,
-                targetGrade: newQuestion.targetGrade ?? '',
+                examCode: questionNumber,
+                questionNumber,
+                targetGrade,
+                sourceYear,
+                sourceGrade,
+                sourceMonth,
+                tags,
                 topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
                 logicFlow: logicFlowSaved,
                 passage: newQuestion.passage,
@@ -446,10 +729,7 @@ export default function TeacherAdminPage() {
 
             await updateQuestion(editingQuestion.id, updates);
             await loadQuestions();
-            setEditingQuestion(null);
-            setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-            setFlowSteps([emptyFlowStep()]);
-            setPassageType('csat');
+            resetQuestionForm();
             alert('문항이 수정되었습니다.');
         } catch (error: unknown) {
             alert('문항 수정 실패: ' + getErrorMessage(error));
@@ -654,20 +934,32 @@ export default function TeacherAdminPage() {
     };
 
     const handleEditQuestion = (q: Question) => {
+        const parsed = parseQuestionSource(q);
+        const tags = normalizeTags(q.tags);
         setEditingQuestion(q);
-        setNewQuestion(q);
+        setNewQuestion({
+            ...q,
+            examCode: parsed.questionNumber || q.examCode,
+            questionNumber: parsed.questionNumber || q.examCode,
+            sourceYear: parsed.sourceYear,
+            sourceGrade: parsed.sourceGrade,
+            sourceMonth: parsed.sourceMonth,
+            tags,
+        });
+        setCustomYearMode(Boolean(parsed.sourceYear && !yearPresets.includes(parsed.sourceYear)));
+        setCustomGradeMode(Boolean(parsed.sourceGrade && !(GRADE_PRESETS as readonly string[]).includes(parsed.sourceGrade)));
+        setCustomMonthMode(Boolean(parsed.sourceMonth && !(MONTH_PRESETS as readonly string[]).includes(parsed.sourceMonth)));
+        setCustomTagInput('');
+
         // Use robust parsing for logicFlow
         const steps = safeParseLogicFlow(q.logicFlow);
         setFlowSteps(steps.length > 0 ? steps.map(s => ({ ...s, macroLabel: s.macroLabel ?? '' })) : [emptyFlowStep()]);
-        const pType = q.passageType || ((!q.topic && (!q.logicFlow || steps.length === 0)) ? 'textbook' : 'csat');
-        setPassageType(pType);
+        setPassageType(isTextbookQuestion(q) ? 'textbook' : 'csat');
+        formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     const handleCancelEdit = () => {
-        setEditingQuestion(null);
-        setNewQuestion({ examCode: '', targetGrade: '', topic: '', logicFlow: '', passage: '' });
-        setFlowSteps([emptyFlowStep()]);
-        setPassageType('csat');
+        resetQuestionForm();
     };
 
     const handleSortColumn = (column: 'class' | 'number' | 'name' | 'competency') => {
@@ -1172,7 +1464,7 @@ export default function TeacherAdminPage() {
                         )}
 
                         {/* Add Question Form */}
-                        <div className="teacher-content-card">
+                        <div className="teacher-content-card" ref={formCardRef}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                                 <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
                                     {editingQuestion ? '문항 수정' : '새 문항 추가'}
@@ -1224,27 +1516,272 @@ export default function TeacherAdminPage() {
                                 </div>
                             </div>
 
-                            <div className="teacher-grid-2">
-                                <div className="teacher-input-group">
-                                    <label className="teacher-input-label">문항 번호</label>
-                                    <input
-                                        type="text"
-                                        className="teacher-input-field"
-                                        placeholder="예: 2024-1학기-64번"
-                                        value={newQuestion.examCode || ''}
-                                        onChange={e => setNewQuestion({ ...newQuestion, examCode: e.target.value })}
-                                    />
-                                </div>
+                            <div className="teacher-input-group">
+                                <label className="teacher-input-label">출처 및 문항 번호 (4분할)</label>
+                                <div className="teacher-source-grid">
+                                    <div className="teacher-source-field">
+                                        <span className="teacher-source-sublabel">년도</span>
+                                        {customYearMode ? (
+                                            <div className="teacher-custom-input-wrap">
+                                                <input
+                                                    type="text"
+                                                    className="teacher-input-field"
+                                                    placeholder="예: 2025"
+                                                    value={newQuestion.sourceYear || ''}
+                                                    onChange={e => setNewQuestion({ ...newQuestion, sourceYear: e.target.value })}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="teacher-inline-switch-btn"
+                                                    onClick={() => {
+                                                        setCustomYearMode(false);
+                                                        if (newQuestion.sourceYear && !yearPresets.includes(normalizeYear(newQuestion.sourceYear))) {
+                                                            setNewQuestion({ ...newQuestion, sourceYear: '' });
+                                                        }
+                                                    }}
+                                                >
+                                                    목록
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <select
+                                                className="teacher-select"
+                                                value={newQuestion.sourceYear || ''}
+                                                onChange={e => {
+                                                    if (e.target.value === '__custom__') {
+                                                        setCustomYearMode(true);
+                                                    } else {
+                                                        setNewQuestion({ ...newQuestion, sourceYear: e.target.value });
+                                                    }
+                                                }}
+                                            >
+                                                <option value="">년도 선택</option>
+                                                {yearPresets.map(y => (
+                                                    <option key={y} value={y}>{y}년</option>
+                                                ))}
+                                                <option value="__custom__">직접 입력...</option>
+                                            </select>
+                                        )}
+                                    </div>
 
-                                <div className="teacher-input-group">
-                                    <label className="teacher-input-label">출처</label>
-                                    <input
-                                        type="text"
-                                        className="teacher-input-field"
-                                        placeholder="예: 2024 수능, 교과서 단원명 등"
-                                        value={newQuestion.targetGrade || ''}
-                                        onChange={e => setNewQuestion({ ...newQuestion, targetGrade: e.target.value })}
-                                    />
+                                    <div className="teacher-source-field">
+                                        <span className="teacher-source-sublabel">학년</span>
+                                        {customGradeMode ? (
+                                            <div className="teacher-custom-input-wrap">
+                                                <input
+                                                    type="text"
+                                                    className="teacher-input-field"
+                                                    placeholder="예: 고2, 중3"
+                                                    value={newQuestion.sourceGrade || ''}
+                                                    onChange={e => setNewQuestion({ ...newQuestion, sourceGrade: e.target.value })}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="teacher-inline-switch-btn"
+                                                    onClick={() => {
+                                                        setCustomGradeMode(false);
+                                                        if (newQuestion.sourceGrade && !(GRADE_PRESETS as readonly string[]).includes(normalizeGrade(newQuestion.sourceGrade))) {
+                                                            setNewQuestion({ ...newQuestion, sourceGrade: '' });
+                                                        }
+                                                    }}
+                                                >
+                                                    목록
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <select
+                                                className="teacher-select"
+                                                value={newQuestion.sourceGrade || ''}
+                                                onChange={e => {
+                                                    if (e.target.value === '__custom__') {
+                                                        setCustomGradeMode(true);
+                                                    } else {
+                                                        setNewQuestion({ ...newQuestion, sourceGrade: e.target.value });
+                                                    }
+                                                }}
+                                            >
+                                                <option value="">학년 선택</option>
+                                                {GRADE_PRESETS.map(g => (
+                                                    <option key={g} value={g}>{g}</option>
+                                                ))}
+                                                <option value="__custom__">직접 입력...</option>
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    <div className="teacher-source-field">
+                                        <span className="teacher-source-sublabel">월/시기</span>
+                                        {customMonthMode ? (
+                                            <div className="teacher-custom-input-wrap">
+                                                <input
+                                                    type="text"
+                                                    className="teacher-input-field"
+                                                    placeholder="예: 9월, 수능, 교과서 2과"
+                                                    value={newQuestion.sourceMonth || ''}
+                                                    onChange={e => setNewQuestion({ ...newQuestion, sourceMonth: e.target.value })}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="teacher-inline-switch-btn"
+                                                    onClick={() => {
+                                                        setCustomMonthMode(false);
+                                                        if (newQuestion.sourceMonth && !(MONTH_PRESETS as readonly string[]).includes(normalizeMonth(newQuestion.sourceMonth))) {
+                                                            setNewQuestion({ ...newQuestion, sourceMonth: '' });
+                                                        }
+                                                    }}
+                                                >
+                                                    목록
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <select
+                                                className="teacher-select"
+                                                value={newQuestion.sourceMonth || ''}
+                                                onChange={e => {
+                                                    if (e.target.value === '__custom__') {
+                                                        setCustomMonthMode(true);
+                                                    } else {
+                                                        setNewQuestion({ ...newQuestion, sourceMonth: e.target.value });
+                                                    }
+                                                }}
+                                            >
+                                                <option value="">월/시기 선택</option>
+                                                {MONTH_PRESETS.map(m => (
+                                                    <option key={m} value={m}>{m}</option>
+                                                ))}
+                                                <option value="__custom__">직접 입력...</option>
+                                            </select>
+                                        )}
+                                    </div>
+
+                                    <div className="teacher-source-field">
+                                        <span className="teacher-source-sublabel">
+                                            문항 번호 <strong style={{ color: '#ef4444' }}>*</strong>
+                                        </span>
+                                        <input
+                                            type="text"
+                                            className="teacher-input-field"
+                                            placeholder="예: 29번, 31번, 1과"
+                                            value={newQuestion.questionNumber ?? newQuestion.examCode ?? ''}
+                                            onChange={e => setNewQuestion({
+                                                ...newQuestion,
+                                                questionNumber: e.target.value,
+                                                examCode: e.target.value,
+                                            })}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="teacher-input-group">
+                                <label className="teacher-input-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <Tag size={15} /> 문항 태그 (복수 선택 가능)
+                                    {normalizeTags(newQuestion.tags).length > 0 && (
+                                        <span style={{ fontSize: '12px', fontWeight: '600', color: '#2563eb' }}>
+                                            ({normalizeTags(newQuestion.tags).length}개 선택됨)
+                                        </span>
+                                    )}
+                                </label>
+                                <div className="teacher-tag-section">
+                                    <div className="teacher-tag-group-row">
+                                        <span className="teacher-tag-group-label">기본 구분</span>
+                                        <div className="teacher-tag-chip-list">
+                                            {PRIMARY_QUESTION_TAGS.map(tag => {
+                                                const active = normalizeTags(newQuestion.tags).includes(tag);
+                                                return (
+                                                    <button
+                                                        key={tag}
+                                                        type="button"
+                                                        onClick={() => handleToggleFormTag(tag)}
+                                                        className={`teacher-tag-chip primary ${active ? 'active' : ''}`}
+                                                    >
+                                                        #{tag}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="teacher-tag-group-row">
+                                        <span className="teacher-tag-group-label">추가 태그</span>
+                                        <div className="teacher-tag-chip-list">
+                                            {SECONDARY_QUESTION_TAGS.map(tag => {
+                                                const active = normalizeTags(newQuestion.tags).includes(tag);
+                                                return (
+                                                    <button
+                                                        key={tag}
+                                                        type="button"
+                                                        onClick={() => handleToggleFormTag(tag)}
+                                                        className={`teacher-tag-chip secondary ${active ? 'active' : ''}`}
+                                                    >
+                                                        #{tag}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="teacher-tag-group-row">
+                                        <span className="teacher-tag-group-label">직접 추가</span>
+                                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                            <div className="teacher-custom-tag-input-row">
+                                                <input
+                                                    type="text"
+                                                    className="teacher-input-field"
+                                                    placeholder="직접 입력 후 Enter 또는 추가 클릭 (쉼표로 여러 개 입력 가능)"
+                                                    value={customTagInput}
+                                                    onChange={e => setCustomTagInput(e.target.value)}
+                                                    onKeyDown={e => {
+                                                        if (e.nativeEvent.isComposing) return;
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            handleAddCustomTags();
+                                                        }
+                                                    }}
+                                                />
+                                                <button
+                                                    type="button"
+                                                    className="teacher-button-secondary"
+                                                    onClick={handleAddCustomTags}
+                                                    disabled={!customTagInput.trim()}
+                                                    style={{ padding: '10px 14px', fontSize: '13px' }}
+                                                >
+                                                    <Plus size={15} /> 추가
+                                                </button>
+                                            </div>
+
+                                            {customTagPool.length > 0 && (
+                                                <div className="teacher-tag-chip-list">
+                                                    {customTagPool.map(tag => {
+                                                        const active = normalizeTags(newQuestion.tags).includes(tag);
+                                                        return (
+                                                            <div
+                                                                key={tag}
+                                                                className={`teacher-tag-chip custom teacher-tag-chip-compound ${active ? 'active' : ''}`}
+                                                            >
+                                                                <button
+                                                                    type="button"
+                                                                    className="teacher-tag-chip-label"
+                                                                    onClick={() => handleToggleFormTag(tag)}
+                                                                >
+                                                                    #{tag}
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="teacher-tag-chip-remove"
+                                                                    title="사용자 태그 목록에서 제거"
+                                                                    aria-label={`${tag} 사용자 태그 제거`}
+                                                                    onClick={() => handleRemoveCustomTag(tag)}
+                                                                >
+                                                                    <X size={12} />
+                                                                </button>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -1446,9 +1983,215 @@ export default function TeacherAdminPage() {
 
                         {/* Question List */}
                         <div className="teacher-content-card">
-                            <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                등록된 문항 ({questions.length}개)
-                            </h2>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
+                                    등록된 문항 ({hasActiveQuestionFilter ? `${filteredEntries.length} / ${questions.length}개` : `${questions.length}개`})
+                                </h2>
+                                {hasActiveQuestionFilter && (
+                                    <button
+                                        type="button"
+                                        className="teacher-button-secondary"
+                                        onClick={resetQuestionFilters}
+                                        style={{ padding: '7px 12px', fontSize: '12px' }}
+                                    >
+                                        <RotateCcw size={14} /> 필터 초기화
+                                    </button>
+                                )}
+                            </div>
+
+                            {questions.length > 0 && (
+                                <div className="teacher-search-panel">
+                                    <div className="teacher-search-header">
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '700', fontSize: '14px', color: '#1e293b' }}>
+                                            <Search size={16} color="#2563eb" />
+                                            <span>문항 검색 및 필터</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                            <div className="teacher-filter-segment">
+                                                {(
+                                                    [
+                                                        { value: 'all', label: '전체' },
+                                                        { value: 'csat', label: '수능형' },
+                                                        { value: 'textbook', label: '교과서' },
+                                                    ] as const
+                                                ).map(opt => (
+                                                    <button
+                                                        key={opt.value}
+                                                        type="button"
+                                                        className={`teacher-filter-segment-btn ${filterPassageType === opt.value ? 'active' : ''}`}
+                                                        onClick={() => setFilterPassageType(opt.value)}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <span className="teacher-search-count-badge">
+                                                {filteredEntries.length} / {questions.length}개
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="teacher-search-grid">
+                                        <div className="teacher-source-field">
+                                            <span className="teacher-source-sublabel">년도</span>
+                                            <select
+                                                className="teacher-select"
+                                                value={filterYear}
+                                                onChange={e => setFilterYear(e.target.value)}
+                                            >
+                                                <option value="">전체 년도</option>
+                                                {availableFilterYears.map(y => (
+                                                    <option key={y} value={y}>
+                                                        {/^\d{4}$/.test(y) ? `${y}년` : y} ({yearCounts.get(y) ?? 0})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="teacher-source-field">
+                                            <span className="teacher-source-sublabel">학년</span>
+                                            <select
+                                                className="teacher-select"
+                                                value={filterGrade}
+                                                onChange={e => setFilterGrade(e.target.value)}
+                                            >
+                                                <option value="">전체 학년</option>
+                                                {availableFilterGrades.map(g => (
+                                                    <option key={g} value={g}>
+                                                        {g} ({gradeCounts.get(g) ?? 0})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="teacher-source-field">
+                                            <span className="teacher-source-sublabel">월/시기</span>
+                                            <select
+                                                className="teacher-select"
+                                                value={filterMonth}
+                                                onChange={e => setFilterMonth(e.target.value)}
+                                            >
+                                                <option value="">전체 월/시기</option>
+                                                {availableFilterMonths.map(m => (
+                                                    <option key={m} value={m}>
+                                                        {m} ({monthCounts.get(m) ?? 0})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        <div className="teacher-source-field">
+                                            <span className="teacher-source-sublabel">문항 번호</span>
+                                            <input
+                                                type="text"
+                                                className="teacher-input-field"
+                                                placeholder="예: 29, 29번"
+                                                value={filterNumber}
+                                                onChange={e => setFilterNumber(e.target.value)}
+                                            />
+                                        </div>
+
+                                        <div className="teacher-source-field">
+                                            <span className="teacher-source-sublabel">주제·본문 키워드</span>
+                                            <input
+                                                type="text"
+                                                className="teacher-input-field"
+                                                placeholder="주제, 지문 단어 검색"
+                                                value={filterKeyword}
+                                                onChange={e => setFilterKeyword(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="teacher-search-tags-area">
+                                        <div className="teacher-search-tags-header">
+                                            <span style={{ fontSize: '12px', fontWeight: '700', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                <Tag size={13} /> 태그 필터
+                                            </span>
+                                            <div className="teacher-filter-segment">
+                                                <button
+                                                    type="button"
+                                                    className={`teacher-filter-segment-btn ${filterTagMode === 'and' ? 'active' : ''}`}
+                                                    onClick={() => setFilterTagMode('and')}
+                                                >
+                                                    모두 포함 (AND)
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className={`teacher-filter-segment-btn ${filterTagMode === 'or' ? 'active' : ''}`}
+                                                    onClick={() => setFilterTagMode('or')}
+                                                >
+                                                    하나 이상 (OR)
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="teacher-search-tag-groups">
+                                            <div className="teacher-tag-group-row">
+                                                <span className="teacher-tag-group-label">기본 구분</span>
+                                                <div className="teacher-tag-chip-list">
+                                                    {PRIMARY_QUESTION_TAGS.map(tag => {
+                                                        const active = filterTags.includes(tag);
+                                                        const count = tagCounts.get(tag) ?? 0;
+                                                        return (
+                                                            <button
+                                                                key={tag}
+                                                                type="button"
+                                                                onClick={() => handleToggleFilterTag(tag)}
+                                                                className={`teacher-tag-chip primary ${active ? 'active' : ''}`}
+                                                            >
+                                                                #{tag} <span className="teacher-tag-count">{count}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="teacher-tag-group-row">
+                                                <span className="teacher-tag-group-label">추가 태그</span>
+                                                <div className="teacher-tag-chip-list">
+                                                    {SECONDARY_QUESTION_TAGS.map(tag => {
+                                                        const active = filterTags.includes(tag);
+                                                        const count = tagCounts.get(tag) ?? 0;
+                                                        return (
+                                                            <button
+                                                                key={tag}
+                                                                type="button"
+                                                                onClick={() => handleToggleFilterTag(tag)}
+                                                                className={`teacher-tag-chip secondary ${active ? 'active' : ''}`}
+                                                            >
+                                                                #{tag} <span className="teacher-tag-count">{count}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            {filterCustomTags.length > 0 && (
+                                                <div className="teacher-tag-group-row">
+                                                    <span className="teacher-tag-group-label">직접 추가</span>
+                                                    <div className="teacher-tag-chip-list">
+                                                        {filterCustomTags.map(tag => {
+                                                            const active = filterTags.includes(tag);
+                                                            const count = tagCounts.get(tag) ?? 0;
+                                                            return (
+                                                                <button
+                                                                    key={tag}
+                                                                    type="button"
+                                                                    onClick={() => handleToggleFilterTag(tag)}
+                                                                    className={`teacher-tag-chip custom ${active ? 'active' : ''}`}
+                                                                >
+                                                                    #{tag} <span className="teacher-tag-count">{count}</span>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {questions.length === 0 ? (
                                 <div className="teacher-empty-state">
@@ -1456,15 +2199,30 @@ export default function TeacherAdminPage() {
                                     <div className="teacher-empty-state-title">등록된 문항이 없습니다.</div>
                                     <div className="teacher-empty-state-subtitle">위 양식을 통해 문항을 추가하세요.</div>
                                 </div>
+                            ) : filteredEntries.length === 0 ? (
+                                <div className="teacher-empty-state" style={{ padding: '40px 20px' }}>
+                                    <Search className="teacher-empty-state-icon" />
+                                    <div className="teacher-empty-state-title">조건에 맞는 문항이 없습니다.</div>
+                                    <div className="teacher-empty-state-subtitle" style={{ marginBottom: '16px' }}>
+                                        검색어나 태그 필터 조건을 변경해 보세요.
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="teacher-button-secondary"
+                                        onClick={resetQuestionFilters}
+                                    >
+                                        <RotateCcw size={15} /> 필터 초기화
+                                    </button>
+                                </div>
                             ) : (
-                                questions.map((q) => {
-                                    const isTextbook = isTextbookQuestion(q);
+                                filteredEntries.map(({ q, source, tags, isTextbook }) => {
                                     const parsedFlowSteps = safeParseLogicFlow(q.logicFlow);
+                                    const hasSplitBadges = Boolean(source.sourceYear || source.sourceGrade || source.sourceMonth);
                                     return (
                                         <div key={q.id} className="teacher-question-card">
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                                                    <span className="teacher-question-badge" style={{ marginRight: 0 }}>{q.examCode}</span>
+                                                    <span className="teacher-question-badge" style={{ marginRight: 0 }}>{source.questionNumber || q.examCode}</span>
                                                     <span
                                                         className="teacher-question-badge"
                                                         style={{
@@ -1475,13 +2233,50 @@ export default function TeacherAdminPage() {
                                                     >
                                                         {isTextbook ? '[교과서]' : '[수능형]'}
                                                     </span>
-                                                    {q.targetGrade ? (
-                                                        <span className="teacher-question-badge" style={{ background: '#f1f5f9', color: '#475569', marginRight: 0 }}>
+                                                    {hasSplitBadges ? (
+                                                        <>
+                                                            {source.sourceYear && (
+                                                                <span className="teacher-question-badge teacher-source-badge">
+                                                                    {/^\d{4}$/.test(source.sourceYear) ? `${source.sourceYear}년` : source.sourceYear}
+                                                                </span>
+                                                            )}
+                                                            {source.sourceGrade && (
+                                                                <span className="teacher-question-badge teacher-source-badge">
+                                                                    {source.sourceGrade}
+                                                                </span>
+                                                            )}
+                                                            {source.sourceMonth && (
+                                                                <span className="teacher-question-badge teacher-source-badge">
+                                                                    {source.sourceMonth}
+                                                                </span>
+                                                            )}
+                                                        </>
+                                                    ) : q.targetGrade ? (
+                                                        <span className="teacher-question-badge teacher-source-badge">
                                                             출처: {q.targetGrade}
                                                         </span>
                                                     ) : null}
                                                     <span style={{ fontWeight: 'bold', fontSize: '15px', color: '#222' }}>{q.topic}</span>
                                                 </div>
+                                                {tags.length > 0 && (
+                                                    <div className="teacher-card-tags-row">
+                                                        {tags.map(tag => {
+                                                            const category = getTagCategory(tag);
+                                                            const isFiltering = filterTags.includes(tag);
+                                                            return (
+                                                                <button
+                                                                    key={tag}
+                                                                    type="button"
+                                                                    onClick={() => handleToggleFilterTag(tag)}
+                                                                    className={`teacher-card-tag ${category} ${isFiltering ? 'active' : ''}`}
+                                                                    title="클릭하여 이 태그로 필터링"
+                                                                >
+                                                                    #{tag}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                                 <p style={{ fontSize: '13px', color: '#666', marginBottom: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '600px' }}>
                                                     {q.passage}
                                                 </p>
