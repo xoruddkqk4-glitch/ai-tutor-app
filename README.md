@@ -9,7 +9,9 @@
 - **수업 관리**: 수업 방(Room)을 생성하고 관리하며, 접속 코드를 발급합니다.
 - **학생 관리**: 학생 명단을 개별 또는 일괄(엑셀 붙여넣기 방식)로 등록 및 관리합니다.
 - **학습 자료 관리**:
-  - 문항 번호, 출처(자유 입력), 지문(Passage), 우리말 주제, **논리 흐름** 등을 등록합니다.
+  - **출처 4분할(년도·학년·월/시기·문항 번호)** 드롭다운 및 직접 입력 전환, 지문(Passage), **문항 태그**, 우리말 주제, **논리 흐름** 등을 등록합니다.
+  - **문항 태그**: 기본 구분(`논리지문`, `반전지문`, `반론지문`, `문제와해결책`), 추가 태그(`예시`, `인용`, `실험`, `비유`, `대조`), 그리고 사용자가 직접 문구를 추가·재사용할 수 있는 커스텀 태그를 지원합니다.
+  - **통합 다중 검색·필터**: 년도·학년·월/시기·문항 번호 개별 필터, 지문 유형(`전체`/`수능형`/`교과서`), 주제·본문 키워드, 다중 태그(`모두 포함 AND` / `하나 이상 OR` 전환)로 문항을 효율적으로 검색할 수 있습니다.
   - **논리 흐름 (순서대로 입력)**  
     - **큰 범주(필수)**: 각 단계마다 입력합니다. 예: 도입, 주제, 설명, 구체적 설명, 결론 등.  
     - **작은 범주(선택)**: 더 잘게 나눌 때만 입력합니다(예: 설명1, 설명2).  
@@ -87,14 +89,15 @@ src/
 │   ├── ai.ts          # OpenAI 호출 통합 및 Edge Function 프록시 연동
 │   ├── auth.ts        # Supabase 인증 관련
 │   ├── errors.ts      # 공통 오류 메시지 추출 유틸
-│   ├── logic-flow.ts  # 논리 흐름 파싱·큰/작은 범주·저장 정규화·지문 유형 판별
-│   ├── public-api.ts  # 학생용 방·문항 RPC (비로그인)
-│   ├── questions.ts   # 문항 관리 API
-│   ├── rooms.ts       # 수업 방 관리 API (재시도·보상 롤백·원자적 RPC 지원)
-│   ├── students.ts    # 학생 관리 API
-│   ├── settings.ts    # 설정 관리
-│   ├── supabase.ts    # Supabase 클라이언트
-│   └── text.ts        # 영어 약어 예외 처리 문장 분리 유틸
+│   ├── logic-flow.ts     # 논리 흐름 파싱·큰/작은 범주·저장 정규화·지문 유형 판별
+│   ├── public-api.ts     # 학생용 방·문항 RPC (비로그인)
+│   ├── question-meta.ts  # 출처 4분할 파싱·포맷, 태그 분류·커스텀 태그 저장 유틸
+│   ├── questions.ts      # 문항 관리 API (네이티브 컬럼 + 폴백 영속성)
+│   ├── rooms.ts          # 수업 방 관리 API (재시도·보상 롤백·원자적 RPC 지원)
+│   ├── students.ts       # 학생 관리 API
+│   ├── settings.ts       # 설정 관리
+│   ├── supabase.ts       # Supabase 클라이언트
+│   └── text.ts           # 영어 약어 예외 처리 문장 분리 유틸
 ├── types/            # TypeScript 타입 정의
 ├── App.tsx           # 메인 라우팅 및 렌더링
 └── index.css         # 전역 스타일 (다크모드·모바일 반응형 포함)
@@ -102,12 +105,16 @@ public/
 └── privacy.html      # 개인정보처리방침 (HTML)
 supabase/
 ├── functions/ai-chat/ # OpenAI 서버 프록시 Edge Function
-└── sql/               # 보안(API 키 비노출) 및 원자적 트랜잭션 RPC 마이그레이션
+└── sql/               # 보안(API 키 비노출)·트랜잭션 RPC·출처/태그 마이그레이션
 ```
 
 ## 📋 최근 작업 및 변경 이력 (Recent Updates)
 
 ### 2026-11-16
+- **학습 자료 관리 출처 4분할·문항 태그 및 다중 검색 필터 추가**:
+  - 출처 입력·검색을 년도, 학년, 월/시기, 문항 번호 4분할 구조(프리셋 드롭다운 + 직접 입력 전환)로 개편하고 기존 자유 출처 문자열 자동 파싱·호환 지원
+  - 기본 구분(`논리지문`, `반전지문`, `반론지문`, `문제와해결책`), 추가(`예시`, `인용`, `실험`, `비유`, `대조`), 사용자 직접 추가 태그 및 다중 검색 필터(`AND`/`OR` 전환, 키워드·유형 필터) 구현
+  - 신규 컬럼(`source_year`, `source_grade`, `source_month`, `tags`) 우선 저장 및 미적용 DB용 `logic_flow` 메타 폴백 처리, 마이그레이션 SQL(`supabase/sql/phase5_question_source_and_tags.sql`) 추가
 - **보안·런타임 버그 보완, 타입/ESLint 정비 및 UI/UX 개선**:
   - 교사 개별 문항 제한수(`max_questions`) 실제 적용, 문항 카드/방 편집 창/학생 모달의 `[수능형]`·`[교과서]` 구분 배지 및 논리 흐름 요약 표시 복구
   - OpenAI 호출 모듈(`src/lib/ai.ts`) 통합 및 API 키 미설정 시 로딩 고정 버그 수정, 학생 ID 기반 삭제, 영어 약어 문장 오분리 방지(`src/lib/text.ts`), 팝업 `postMessage` `origin` 검증 적용
@@ -151,6 +158,16 @@ This project is private and for educational use only.
   - **코드 품질·저장소 위생 (Phase 2)**: `Student`/DB Row 타입 통합 및 공통 에러 유틸(`src/lib/errors.ts`) 도입으로 ESLint 오류 34건 전량 해결, 미동작 Tailwind 지시어를 명시적 유틸리티 CSS로 교체, 레거시 파일(`src/lib/public-api.txt`, `build_log.txt`, `tailwind.config.js`) 제거, `index.html` 한국어 메타데이터 정비, `.agents` 규칙·스킬(`/ask`, `/apply`, `/scratchpad`, `/git-commit`) 업데이트
   - **UI/UX·반응형 개선 (Phase 3)**: OS 다크 모드 라이트 패널 가독성 보완, 모바일(`768px` 이하) 학생 채팅 학습 메뉴 드로어 적용, 학생 채팅 화면 `지문 보기/닫기` 토글 패널 및 SPA 뒤로가기(`onBack`) 추가, 교사 대시보드 수업 방 `일시중지`/`재개` 토글 UI 연결
   - **보안·트랜잭션 인프라 준비 (Phase 4)**: 방 코드 중복 재시도·실패 시 보상 롤백 및 원자적 RPC 폴백(`src/lib/rooms.ts`), Supabase Edge Function(`supabase/functions/ai-chat/index.ts`) 및 보안/트랜잭션 SQL(`supabase/sql/phase4_security_and_transactions.sql`) 추가
+- **검증 결과**:
+  - `npx tsc --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+
+## [2026-11-16 15:47] 업데이트 이력 (Commit ID: `febedbd`)
+- **수정 내용**:
+  - **출처 4분할 구조화 및 레거시 호환 (`src/types/index.ts`, `src/lib/question-meta.ts`, `src/pages/TeacherAdminDashboard.tsx`)**: 기존 `[문항 번호, 출처]` 입력을 `[년도, 학년, 월/시기, 문항 번호]` 4분할 입력(표준 프리셋 드롭다운 + `직접 입력` 전환)으로 개편하고, 기존 자유 형식 출처 문자열 자동 파싱·보존 및 포맷팅 지원
+  - **문항 태그 시스템 도입 (`src/lib/question-meta.ts`, `src/pages/TeacherAdminDashboard.tsx`, `src/pages/RoomEditWindow.tsx`)**: 기본 지문 구분(`논리지문`, `반전지문`, `반론지문`, `문제와해결책`), 추가 전개·표현 태그(`예시`, `인용`, `실험`, `비유`, `대조`), 사용자 직접 문구 추가(쉼표 다중 입력·한글 IME 중복 방지·교사별 사용자 태그 풀 보관 및 삭제) 구현, 문항 카드 및 수업 방 편집 창에 카테고리별 태그 배지 표시
+  - **학습 자료 다중 검색·필터 패널 (`src/pages/TeacherAdminDashboard.tsx`, `src/index.css`)**: 년도·학년·월/시기(보유 문항 수 표시)·문항 번호·지문 유형(`전체/수능형/교과서`)·주제/본문 키워드·다중 태그(`모두 포함 AND` / `하나 이상 OR` 전환) 검색 및 카드 태그 클릭 필터링·초기화 UI/반응형/다크모드 스타일 추가
+  - **무중단 DB 영속성 및 마이그레이션 SQL (`src/lib/questions.ts`, `src/lib/logic-flow.ts`, `src/lib/public-api.ts`, `supabase/sql/phase5_question_source_and_tags.sql`)**: 신규 컬럼(`source_year`, `source_grade`, `source_month`, `tags`) 우선 저장 및 미적용 DB 환경용 `logic_flow` 메타 엔트리(`__meta`) 자동 폴백·정제 처리, 네이티브 전환용 SQL 스크립트 추가
 - **검증 결과**:
   - `npx tsc --noEmit`: 통과 (타입 에러 0건)
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
