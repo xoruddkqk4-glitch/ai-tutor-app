@@ -84,22 +84,36 @@ src/
 │   ├── TeacherAdminDashboard.tsx # 선생님용 관리자 대시보드
 │   └── RoomEditWindow.tsx        # 수업 방 생성/수정
 ├── lib/
+│   ├── ai.ts          # OpenAI 호출 통합 및 Edge Function 프록시 연동
 │   ├── auth.ts        # Supabase 인증 관련
-│   ├── logic-flow.ts  # 논리 흐름 파싱·큰/작은 범주·저장 정규화
-│   ├── questions.ts   # 문항 관리 API
+│   ├── errors.ts      # 공통 오류 메시지 추출 유틸
+│   ├── logic-flow.ts  # 논리 흐름 파싱·큰/작은 범주·저장 정규화·지문 유형 판별
 │   ├── public-api.ts  # 학생용 방·문항 RPC (비로그인)
-│   ├── rooms.ts       # 수업 방 관리 API
+│   ├── questions.ts   # 문항 관리 API
+│   ├── rooms.ts       # 수업 방 관리 API (재시도·보상 롤백·원자적 RPC 지원)
 │   ├── students.ts    # 학생 관리 API
 │   ├── settings.ts    # 설정 관리
-│   └── supabase.ts    # Supabase 클라이언트
+│   ├── supabase.ts    # Supabase 클라이언트
+│   └── text.ts        # 영어 약어 예외 처리 문장 분리 유틸
 ├── types/            # TypeScript 타입 정의
 ├── App.tsx           # 메인 라우팅 및 렌더링
-└── index.css         # 전역 스타일 (다크모드 포함)
+└── index.css         # 전역 스타일 (다크모드·모바일 반응형 포함)
 public/
 └── privacy.html      # 개인정보처리방침 (HTML)
+supabase/
+├── functions/ai-chat/ # OpenAI 서버 프록시 Edge Function
+└── sql/               # 보안(API 키 비노출) 및 원자적 트랜잭션 RPC 마이그레이션
 ```
 
 ## 📋 최근 작업 및 변경 이력 (Recent Updates)
+
+### 2026-11-16
+- **보안·런타임 버그 보완, 타입/ESLint 정비 및 UI/UX 개선**:
+  - 교사 개별 문항 제한수(`max_questions`) 실제 적용, 문항 카드/방 편집 창/학생 모달의 `[수능형]`·`[교과서]` 구분 배지 및 논리 흐름 요약 표시 복구
+  - OpenAI 호출 모듈(`src/lib/ai.ts`) 통합 및 API 키 미설정 시 로딩 고정 버그 수정, 학생 ID 기반 삭제, 영어 약어 문장 오분리 방지(`src/lib/text.ts`), 팝업 `postMessage` `origin` 검증 적용
+  - `Student`/DB Row 타입 단일화 및 ESLint 34건 전량 해소(`npx tsc --noEmit`, `npm run lint` 0 errors), 레거시 파일(`public-api.txt`, `build_log.txt`, `tailwind.config.js`) 정리
+  - OS 다크 모드 라이트 카드 가독성 보완, 모바일(`768px` 이하) 학생 채팅 학습 메뉴 드로어 및 `지문 보기` 패널 추가, 수업 방 `일시중지`/`재개` 토글 연결
+  - Supabase Edge Function 프록시(`ai-chat`) 및 보안·트랜잭션 SQL 스크립트 준비
 
 ### 2026-09-06
 - **교과서 지문 / 수능형 지문 선택 토글 및 조건부 비활성화 구현**:
@@ -122,8 +136,22 @@ public/
   - 카드 제목을 `For Teachers` 및 `For Learners`로 변경.
   - 카드 하단에 2줄의 방문자 안내 문구(중앙 정렬) 추가.
 - **에이전트 디렉토리 단일화 & GitHub 연동**:
-  - 레거시 `.antigravity` 제거, [`.agents`](file:///c:/Users/user/Desktop/web%20app/ai-tutor-app-main/.agents) 단일화 및 Vercel 자동 배포 연동 완료.
+  - 레거시 `.antigravity` 제거, [`.agents`](./.agents) 단일화 및 Vercel 자동 배포 연동 완료.
 
 ## 📝 라이선스
 
 This project is private and for educational use only.
+
+---
+
+## [2026-11-16 15:22] 업데이트 이력 (Commit ID: `57b0da9`)
+- **수정 내용**:
+  - **현황 점검 및 계획 수립 (`.plan/implementation_plan_2026-11-16_14-45.md`)**: 프로젝트 기능·Git 상태 점검 및 Phase 1~4 보완 계획서 작성
+  - **기능·버그 보완 (Phase 1)**: 교사 개별 문항 제한수(`max_questions`) 실제 적용, 문항 카드 `[수능형]`/`[교과서]` 상태 배지 및 수업 방 편집 창 논리 흐름 요약 복구, OpenAI 호출 공통화(`src/lib/ai.ts`) 및 API 키 미설정 시 로딩 잠김·예외 처리 수정, 학생 일괄 삭제 `student.id` 기준 전환, 영어 약어 문장 오분리 방지(`src/lib/text.ts`), 팝업 `postMessage` 출처(`origin`) 검증 추가
+  - **코드 품질·저장소 위생 (Phase 2)**: `Student`/DB Row 타입 통합 및 공통 에러 유틸(`src/lib/errors.ts`) 도입으로 ESLint 오류 34건 전량 해결, 미동작 Tailwind 지시어를 명시적 유틸리티 CSS로 교체, 레거시 파일(`src/lib/public-api.txt`, `build_log.txt`, `tailwind.config.js`) 제거, `index.html` 한국어 메타데이터 정비, `.agents` 규칙·스킬(`/ask`, `/apply`, `/scratchpad`, `/git-commit`) 업데이트
+  - **UI/UX·반응형 개선 (Phase 3)**: OS 다크 모드 라이트 패널 가독성 보완, 모바일(`768px` 이하) 학생 채팅 학습 메뉴 드로어 적용, 학생 채팅 화면 `지문 보기/닫기` 토글 패널 및 SPA 뒤로가기(`onBack`) 추가, 교사 대시보드 수업 방 `일시중지`/`재개` 토글 UI 연결
+  - **보안·트랜잭션 인프라 준비 (Phase 4)**: 방 코드 중복 재시도·실패 시 보상 롤백 및 원자적 RPC 폴백(`src/lib/rooms.ts`), Supabase Edge Function(`supabase/functions/ai-chat/index.ts`) 및 보안/트랜잭션 SQL(`supabase/sql/phase4_security_and_transactions.sql`) 추가
+- **검증 결과**:
+  - `npx tsc --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+
