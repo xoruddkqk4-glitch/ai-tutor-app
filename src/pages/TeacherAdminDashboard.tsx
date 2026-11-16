@@ -22,6 +22,7 @@ import {
     normalizeYear,
     normalizeGrade,
     normalizeMonth,
+    normalizeSourceNumber,
     normalizeTags,
     getTagCategory,
     parseQuestionSource,
@@ -36,11 +37,11 @@ type TeacherRole = 'master' | 'regular';
 
 const emptyQuestionForm = (): Partial<Question> => ({
     examCode: '',
-    questionNumber: '',
     targetGrade: '',
     sourceYear: '',
     sourceGrade: '',
     sourceMonth: '',
+    sourceNumber: '',
     tags: [],
     topic: '',
     logicFlow: '',
@@ -85,7 +86,8 @@ export default function TeacherAdminPage() {
     const [filterYear, setFilterYear] = useState('');
     const [filterGrade, setFilterGrade] = useState('');
     const [filterMonth, setFilterMonth] = useState('');
-    const [filterNumber, setFilterNumber] = useState('');
+    const [filterSourceNumber, setFilterSourceNumber] = useState('');
+    const [filterExamCode, setFilterExamCode] = useState('');
     const [filterKeyword, setFilterKeyword] = useState('');
     const [filterPassageType, setFilterPassageType] = useState<'all' | 'csat' | 'textbook'>('all');
     const [filterTags, setFilterTags] = useState<string[]>([]);
@@ -412,7 +414,10 @@ export default function TeacherAdminPage() {
             if (filterYear && source.sourceYear !== filterYear) return false;
             if (filterGrade && source.sourceGrade !== filterGrade) return false;
             if (filterMonth && source.sourceMonth !== filterMonth) return false;
-            if (filterNumber.trim() && !matchesQuestionNumberFilter(source.questionNumber || q.examCode, filterNumber)) {
+            if (filterSourceNumber.trim() && !matchesQuestionNumberFilter(source.sourceNumber, filterSourceNumber)) {
+                return false;
+            }
+            if (filterExamCode.trim() && !matchesQuestionNumberFilter(q.examCode, filterExamCode)) {
                 return false;
             }
             if (filterTags.length > 0) {
@@ -429,6 +434,7 @@ export default function TeacherAdminPage() {
                     source.sourceYear,
                     source.sourceGrade,
                     source.sourceMonth,
+                    source.sourceNumber,
                     q.topic,
                     q.passage,
                     ...tags,
@@ -445,7 +451,8 @@ export default function TeacherAdminPage() {
         filterYear,
         filterGrade,
         filterMonth,
-        filterNumber,
+        filterSourceNumber,
+        filterExamCode,
         filterTags,
         filterTagMode,
         filterKeyword,
@@ -455,7 +462,8 @@ export default function TeacherAdminPage() {
         filterYear ||
         filterGrade ||
         filterMonth ||
-        filterNumber.trim() ||
+        filterSourceNumber.trim() ||
+        filterExamCode.trim() ||
         filterKeyword.trim() ||
         filterPassageType !== 'all' ||
         filterTags.length > 0
@@ -476,7 +484,8 @@ export default function TeacherAdminPage() {
         setFilterYear('');
         setFilterGrade('');
         setFilterMonth('');
-        setFilterNumber('');
+        setFilterSourceNumber('');
+        setFilterExamCode('');
         setFilterKeyword('');
         setFilterPassageType('all');
         setFilterTags([]);
@@ -649,8 +658,8 @@ export default function TeacherAdminPage() {
             return;
         }
 
-        const questionNumber = (newQuestion.questionNumber || newQuestion.examCode || '').trim();
-        if (!questionNumber || !newQuestion.passage?.trim()) {
+        const examCode = (newQuestion.examCode || '').trim();
+        if (!examCode || !newQuestion.passage?.trim()) {
             alert('문항 번호와 본문은 필수입니다.');
             return;
         }
@@ -664,17 +673,18 @@ export default function TeacherAdminPage() {
         const sourceYear = normalizeYear(newQuestion.sourceYear);
         const sourceGrade = normalizeGrade(newQuestion.sourceGrade);
         const sourceMonth = normalizeMonth(newQuestion.sourceMonth);
-        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth });
+        const sourceNumber = normalizeSourceNumber(newQuestion.sourceNumber);
+        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth, sourceNumber });
         const tags = normalizeTags(newQuestion.tags);
 
         try {
             const q: Omit<Question, 'id'> = {
-                examCode: questionNumber,
-                questionNumber,
+                examCode,
                 targetGrade,
                 sourceYear,
                 sourceGrade,
                 sourceMonth,
+                sourceNumber,
                 tags,
                 topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
                 logicFlow: logicFlowSaved,
@@ -694,8 +704,8 @@ export default function TeacherAdminPage() {
     const handleUpdateQuestion = async () => {
         if (!editingQuestion) return;
 
-        const questionNumber = (newQuestion.questionNumber || newQuestion.examCode || '').trim();
-        if (!questionNumber || !newQuestion.passage?.trim()) {
+        const examCode = (newQuestion.examCode || '').trim();
+        if (!examCode || !newQuestion.passage?.trim()) {
             alert('문항 번호와 본문은 필수입니다.');
             return;
         }
@@ -709,17 +719,18 @@ export default function TeacherAdminPage() {
         const sourceYear = normalizeYear(newQuestion.sourceYear);
         const sourceGrade = normalizeGrade(newQuestion.sourceGrade);
         const sourceMonth = normalizeMonth(newQuestion.sourceMonth);
-        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth });
+        const sourceNumber = normalizeSourceNumber(newQuestion.sourceNumber);
+        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth, sourceNumber });
         const tags = normalizeTags(newQuestion.tags);
 
         try {
             const updates: Partial<Omit<Question, 'id'>> = {
-                examCode: questionNumber,
-                questionNumber,
+                examCode,
                 targetGrade,
                 sourceYear,
                 sourceGrade,
                 sourceMonth,
+                sourceNumber,
                 tags,
                 topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
                 logicFlow: logicFlowSaved,
@@ -939,11 +950,11 @@ export default function TeacherAdminPage() {
         setEditingQuestion(q);
         setNewQuestion({
             ...q,
-            examCode: parsed.questionNumber || q.examCode,
-            questionNumber: parsed.questionNumber || q.examCode,
+            examCode: q.examCode,
             sourceYear: parsed.sourceYear,
             sourceGrade: parsed.sourceGrade,
             sourceMonth: parsed.sourceMonth,
+            sourceNumber: parsed.sourceNumber,
             tags,
         });
         setCustomYearMode(Boolean(parsed.sourceYear && !yearPresets.includes(parsed.sourceYear)));
@@ -1517,7 +1528,23 @@ export default function TeacherAdminPage() {
                             </div>
 
                             <div className="teacher-input-group">
-                                <label className="teacher-input-label">출처 및 문항 번호 (4분할)</label>
+                                <label className="teacher-input-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span>문항 번호 <strong style={{ color: '#ef4444' }}>*</strong></span>
+                                    <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#64748b' }}>
+                                        (수업을 위한 문항 번호)
+                                    </span>
+                                </label>
+                                <input
+                                    type="text"
+                                    className="teacher-input-field"
+                                    placeholder="예: 2024-1학기-64번"
+                                    value={newQuestion.examCode || ''}
+                                    onChange={e => setNewQuestion({ ...newQuestion, examCode: e.target.value })}
+                                />
+                            </div>
+
+                            <div className="teacher-input-group">
+                                <label className="teacher-input-label">출처 (년도 · 학년 · 월 · 문항 번호)</label>
                                 <div className="teacher-source-grid">
                                     <div className="teacher-source-field">
                                         <span className="teacher-source-sublabel">년도</span>
@@ -1655,19 +1682,13 @@ export default function TeacherAdminPage() {
                                     </div>
 
                                     <div className="teacher-source-field">
-                                        <span className="teacher-source-sublabel">
-                                            문항 번호 <strong style={{ color: '#ef4444' }}>*</strong>
-                                        </span>
+                                        <span className="teacher-source-sublabel">문항 번호</span>
                                         <input
                                             type="text"
                                             className="teacher-input-field"
-                                            placeholder="예: 29번, 31번, 1과"
-                                            value={newQuestion.questionNumber ?? newQuestion.examCode ?? ''}
-                                            onChange={e => setNewQuestion({
-                                                ...newQuestion,
-                                                questionNumber: e.target.value,
-                                                examCode: e.target.value,
-                                            })}
+                                            placeholder="예: 29번, 31~32번"
+                                            value={newQuestion.sourceNumber || ''}
+                                            onChange={e => setNewQuestion({ ...newQuestion, sourceNumber: e.target.value })}
                                         />
                                     </div>
                                 </div>
@@ -2031,9 +2052,9 @@ export default function TeacherAdminPage() {
                                         </div>
                                     </div>
 
-                                    <div className="teacher-search-grid">
+                                    <div className="teacher-source-grid">
                                         <div className="teacher-source-field">
-                                            <span className="teacher-source-sublabel">년도</span>
+                                            <span className="teacher-source-sublabel">출처 년도</span>
                                             <select
                                                 className="teacher-select"
                                                 value={filterYear}
@@ -2049,7 +2070,7 @@ export default function TeacherAdminPage() {
                                         </div>
 
                                         <div className="teacher-source-field">
-                                            <span className="teacher-source-sublabel">학년</span>
+                                            <span className="teacher-source-sublabel">출처 학년</span>
                                             <select
                                                 className="teacher-select"
                                                 value={filterGrade}
@@ -2065,7 +2086,7 @@ export default function TeacherAdminPage() {
                                         </div>
 
                                         <div className="teacher-source-field">
-                                            <span className="teacher-source-sublabel">월/시기</span>
+                                            <span className="teacher-source-sublabel">출처 월/시기</span>
                                             <select
                                                 className="teacher-select"
                                                 value={filterMonth}
@@ -2081,13 +2102,26 @@ export default function TeacherAdminPage() {
                                         </div>
 
                                         <div className="teacher-source-field">
-                                            <span className="teacher-source-sublabel">문항 번호</span>
+                                            <span className="teacher-source-sublabel">출처 문항 번호</span>
                                             <input
                                                 type="text"
                                                 className="teacher-input-field"
                                                 placeholder="예: 29, 29번"
-                                                value={filterNumber}
-                                                onChange={e => setFilterNumber(e.target.value)}
+                                                value={filterSourceNumber}
+                                                onChange={e => setFilterSourceNumber(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="teacher-search-subgrid">
+                                        <div className="teacher-source-field">
+                                            <span className="teacher-source-sublabel">수업 문항 번호</span>
+                                            <input
+                                                type="text"
+                                                className="teacher-input-field"
+                                                placeholder="예: 64번, 1학기-64"
+                                                value={filterExamCode}
+                                                onChange={e => setFilterExamCode(e.target.value)}
                                             />
                                         </div>
 
@@ -2217,12 +2251,17 @@ export default function TeacherAdminPage() {
                             ) : (
                                 filteredEntries.map(({ q, source, tags, isTextbook }) => {
                                     const parsedFlowSteps = safeParseLogicFlow(q.logicFlow);
-                                    const hasSplitBadges = Boolean(source.sourceYear || source.sourceGrade || source.sourceMonth);
+                                    const hasSplitBadges = Boolean(
+                                        source.sourceYear ||
+                                        source.sourceGrade ||
+                                        source.sourceMonth ||
+                                        source.sourceNumber
+                                    );
                                     return (
                                         <div key={q.id} className="teacher-question-card">
                                             <div style={{ flex: 1 }}>
                                                 <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-                                                    <span className="teacher-question-badge" style={{ marginRight: 0 }}>{source.questionNumber || q.examCode}</span>
+                                                    <span className="teacher-question-badge" style={{ marginRight: 0 }}>{q.examCode}</span>
                                                     <span
                                                         className="teacher-question-badge"
                                                         style={{
@@ -2248,6 +2287,11 @@ export default function TeacherAdminPage() {
                                                             {source.sourceMonth && (
                                                                 <span className="teacher-question-badge teacher-source-badge">
                                                                     {source.sourceMonth}
+                                                                </span>
+                                                            )}
+                                                            {source.sourceNumber && (
+                                                                <span className="teacher-question-badge teacher-source-badge">
+                                                                    {source.sourceNumber}
                                                                 </span>
                                                             )}
                                                         </>

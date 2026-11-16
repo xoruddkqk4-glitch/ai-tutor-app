@@ -6,7 +6,7 @@ export interface QuestionEmbeddedMeta {
     sourceYear?: string;
     sourceGrade?: string;
     sourceMonth?: string;
-    questionNumber?: string;
+    sourceNumber?: string;
     passageType?: PassageType;
 }
 
@@ -61,7 +61,7 @@ export function attachEmbeddedQuestionMeta(
     if (meta.sourceYear) cleanMeta.sourceYear = meta.sourceYear;
     if (meta.sourceGrade) cleanMeta.sourceGrade = meta.sourceGrade;
     if (meta.sourceMonth) cleanMeta.sourceMonth = meta.sourceMonth;
-    if (meta.questionNumber) cleanMeta.questionNumber = meta.questionNumber;
+    if (meta.sourceNumber) cleanMeta.sourceNumber = meta.sourceNumber;
     if (meta.passageType) cleanMeta.passageType = meta.passageType;
 
     const hasMetaFields =
@@ -69,7 +69,7 @@ export function attachEmbeddedQuestionMeta(
         Boolean(cleanMeta.sourceYear) ||
         Boolean(cleanMeta.sourceGrade) ||
         Boolean(cleanMeta.sourceMonth) ||
-        Boolean(cleanMeta.questionNumber) ||
+        Boolean(cleanMeta.sourceNumber) ||
         Boolean(cleanMeta.passageType);
 
     return hasMetaFields ? [...steps, cleanMeta] : [...steps];

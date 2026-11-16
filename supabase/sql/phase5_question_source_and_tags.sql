@@ -10,6 +10,7 @@ ALTER TABLE public.questions
     ADD COLUMN IF NOT EXISTS source_year text,
     ADD COLUMN IF NOT EXISTS source_grade text,
     ADD COLUMN IF NOT EXISTS source_month text,
+    ADD COLUMN IF NOT EXISTS source_number text,
     ADD COLUMN IF NOT EXISTS tags text[] NOT NULL DEFAULT '{}'::text[],
     ADD COLUMN IF NOT EXISTS passage_type text;
 
@@ -17,7 +18,7 @@ CREATE INDEX IF NOT EXISTS idx_questions_tags_gin
     ON public.questions USING gin (tags);
 
 CREATE INDEX IF NOT EXISTS idx_questions_source_parts
-    ON public.questions (teacher_id, source_year, source_grade, source_month);
+    ON public.questions (teacher_id, source_year, source_grade, source_month, source_number);
 
 -- 학생용 공개 RPC(get_active_room_data)가 분리 출처 및 태그 필드도 함께 반환하도록 갱신
 CREATE OR REPLACE FUNCTION public.get_active_room_data(p_code text)
@@ -80,6 +81,7 @@ BEGIN
                 'source_year', q.source_year,
                 'source_grade', q.source_grade,
                 'source_month', q.source_month,
+                'source_number', q.source_number,
                 'tags', COALESCE(q.tags, '{}'::text[]),
                 'topic', q.topic,
                 'logic_flow', q.logic_flow,

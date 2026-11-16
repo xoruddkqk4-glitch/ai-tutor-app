@@ -9,6 +9,7 @@ import {
     formatSourceSummary,
     normalizeGrade,
     normalizeMonth,
+    normalizeSourceNumber,
     normalizeTags,
     normalizeYear,
     parseQuestionSource,
@@ -22,6 +23,7 @@ interface QuestionRow {
     source_year?: string | null
     source_grade?: string | null
     source_month?: string | null
+    source_number?: string | null
     tags?: unknown
     topic?: string | null
     logic_flow?: Question['logicFlow'] | null
@@ -36,6 +38,7 @@ interface QuestionDbWrite {
     source_year?: string
     source_grade?: string
     source_month?: string
+    source_number?: string
     tags?: string[]
     topic?: string
     logic_flow?: unknown
@@ -53,6 +56,7 @@ function isMissingQuestionColumnError(error: { code?: string; message?: string }
         msg.includes('source_year') ||
         msg.includes('source_grade') ||
         msg.includes('source_month') ||
+        msg.includes('source_number') ||
         msg.includes('tags') ||
         msg.includes('passage_type') ||
         msg.includes('schema cache') ||
@@ -68,7 +72,7 @@ function mapQuestionRow(
         sourceYear?: string
         sourceGrade?: string
         sourceMonth?: string
-        questionNumber?: string
+        sourceNumber?: string
     }
 ): Question {
     const topic = item.topic || ''
@@ -83,13 +87,14 @@ function mapQuestionRow(
         ? 'textbook'
         : 'csat'
 
+    const rawSourceNumber =
+        (item.source_number ?? '').trim() || embedded?.sourceNumber || fallback?.sourceNumber
     const parsedSource = parseQuestionSource({
         sourceYear: (item.source_year ?? '').trim() || embedded?.sourceYear || fallback?.sourceYear,
         sourceGrade: (item.source_grade ?? '').trim() || embedded?.sourceGrade || fallback?.sourceGrade,
         sourceMonth: (item.source_month ?? '').trim() || embedded?.sourceMonth || fallback?.sourceMonth,
-        questionNumber: embedded?.questionNumber || fallback?.questionNumber || item.exam_code,
+        sourceNumber: rawSourceNumber || undefined,
         targetGrade: item.target_grade,
-        examCode: item.exam_code,
     })
 
     const nativeTags = normalizeTags(item.tags)
@@ -101,11 +106,11 @@ function mapQuestionRow(
     return {
         id: item.id,
         examCode: item.exam_code,
-        questionNumber: parsedSource.questionNumber || item.exam_code,
-        targetGrade: (item.target_grade ?? '').trim() || formattedSource,
+        targetGrade: formattedSource || (item.target_grade ?? '').trim(),
         sourceYear: parsedSource.sourceYear,
         sourceGrade: parsedSource.sourceGrade,
         sourceMonth: parsedSource.sourceMonth,
+        sourceNumber: parsedSource.sourceNumber,
         tags,
         topic,
         logicFlow: cleanFlow,
@@ -140,11 +145,14 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('로그인이 필요합니다')
 
-    const examCode = (question.questionNumber || question.examCode || '').trim()
+    const examCode = (question.examCode || '').trim()
     const sourceYear = normalizeYear(question.sourceYear)
     const sourceGrade = normalizeGrade(question.sourceGrade)
     const sourceMonth = normalizeMonth(question.sourceMonth)
-    const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth }) || (question.targetGrade ?? '').trim()
+    const sourceNumber = normalizeSourceNumber(question.sourceNumber)
+    const targetGrade =
+        formatSourceSummary({ sourceYear, sourceGrade, sourceMonth, sourceNumber }) ||
+        (question.targetGrade ?? '').trim()
     const cleanSteps = safeParseLogicFlow(question.logicFlow)
     const tags = normalizeTags(question.tags)
     const passageType: PassageType = question.passageType || 'csat'
@@ -155,7 +163,7 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
         sourceYear,
         sourceGrade,
         sourceMonth,
-        questionNumber: examCode,
+        sourceNumber,
     }
 
     if (extendedColumnsSupported !== false) {
@@ -166,6 +174,7 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
             source_year: sourceYear,
             source_grade: sourceGrade,
             source_month: sourceMonth,
+            source_number: sourceNumber,
             tags,
             topic: question.topic,
             logic_flow: cleanSteps,
@@ -200,7 +209,7 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
             sourceYear,
             sourceGrade,
             sourceMonth,
-            questionNumber: examCode,
+            sourceNumber,
             passageType,
         }),
         passage: question.passage,
@@ -223,18 +232,18 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('로그인이 필요합니다')
 
-    const examCode = updates.questionNumber !== undefined || updates.examCode !== undefined
-        ? (updates.questionNumber ?? updates.examCode ?? '').trim()
-        : undefined
+    const examCode = updates.examCode !== undefined ? updates.examCode.trim() : undefined
     const hasSplitSourceUpdate =
         updates.sourceYear !== undefined ||
         updates.sourceGrade !== undefined ||
-        updates.sourceMonth !== undefined
+        updates.sourceMonth !== undefined ||
+        updates.sourceNumber !== undefined
     const sourceYear = updates.sourceYear !== undefined ? normalizeYear(updates.sourceYear) : undefined
     const sourceGrade = updates.sourceGrade !== undefined ? normalizeGrade(updates.sourceGrade) : undefined
     const sourceMonth = updates.sourceMonth !== undefined ? normalizeMonth(updates.sourceMonth) : undefined
+    const sourceNumber = updates.sourceNumber !== undefined ? normalizeSourceNumber(updates.sourceNumber) : undefined
     const targetGrade = hasSplitSourceUpdate
-        ? formatSourceSummary({ sourceYear, sourceGrade, sourceMonth })
+        ? formatSourceSummary({ sourceYear, sourceGrade, sourceMonth, sourceNumber })
         : updates.targetGrade
     const cleanSteps = updates.logicFlow !== undefined ? safeParseLogicFlow(updates.logicFlow) : undefined
     const tags = updates.tags !== undefined ? normalizeTags(updates.tags) : undefined
@@ -246,7 +255,7 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
         sourceYear,
         sourceGrade,
         sourceMonth,
-        questionNumber: examCode,
+        sourceNumber,
     }
 
     if (extendedColumnsSupported !== false) {
@@ -256,6 +265,7 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
         if (sourceYear !== undefined) extendedUpdate.source_year = sourceYear
         if (sourceGrade !== undefined) extendedUpdate.source_grade = sourceGrade
         if (sourceMonth !== undefined) extendedUpdate.source_month = sourceMonth
+        if (sourceNumber !== undefined) extendedUpdate.source_number = sourceNumber
         if (tags !== undefined) extendedUpdate.tags = tags
         if (updates.topic !== undefined) extendedUpdate.topic = updates.topic
         if (cleanSteps !== undefined) extendedUpdate.logic_flow = cleanSteps
@@ -304,7 +314,6 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
         cleanSteps !== undefined ||
         tags !== undefined ||
         hasSplitSourceUpdate ||
-        examCode !== undefined ||
         passageType !== undefined
     ) {
         fallbackUpdate.logic_flow = attachEmbeddedQuestionMeta(fallbackSteps, {
@@ -312,7 +321,7 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
             sourceYear: sourceYear ?? existingMeta?.sourceYear,
             sourceGrade: sourceGrade ?? existingMeta?.sourceGrade,
             sourceMonth: sourceMonth ?? existingMeta?.sourceMonth,
-            questionNumber: examCode ?? existingMeta?.questionNumber,
+            sourceNumber: sourceNumber ?? existingMeta?.sourceNumber,
             passageType: passageType ?? existingMeta?.passageType,
         })
     }

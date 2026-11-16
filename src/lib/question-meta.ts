@@ -45,7 +45,7 @@ export function normalizeYear(raw?: string | null): string {
     const fullMatch = trimmed.match(/^(20\d{2})\s*(?:학년도|년)?$/);
     if (fullMatch) return fullMatch[1];
 
-    const shortMatch = trimmed.match(/^(\d{2})\s*년$/);
+    const shortMatch = trimmed.match(/^(\d{2})\s*(?:학년도|년)$/);
     if (shortMatch) return `20${shortMatch[1]}`;
 
     return trimmed;
@@ -75,6 +75,18 @@ export function normalizeMonth(raw?: string | null): string {
     const monthMatch = trimmed.match(/^(1[0-2]|0?[1-9])\s*월?$/);
     if (monthMatch) {
         return `${Number(monthMatch[1])}월`;
+    }
+
+    return trimmed;
+}
+
+export function normalizeSourceNumber(raw?: string | null): string {
+    const trimmed = (raw ?? '').replace(/\s+/g, ' ').trim();
+    if (!trimmed) return '';
+
+    const numRangeMatch = trimmed.match(/^(?:#|No\.?\s*)?(\d{1,3}(?:\s*[~-]\s*\d{1,3})?)(?:\s*번)?$/i);
+    if (numRangeMatch) {
+        return `${numRangeMatch[1].replace(/\s+/g, '')}번`;
     }
 
     return trimmed;
@@ -111,78 +123,85 @@ export interface ParsedQuestionSource {
     sourceYear: string;
     sourceGrade: string;
     sourceMonth: string;
-    questionNumber: string;
+    sourceNumber: string;
 }
 
-export function parseQuestionSource(q: {
-    sourceYear?: string | null;
-    sourceGrade?: string | null;
-    sourceMonth?: string | null;
-    questionNumber?: string | null;
-    targetGrade?: string | null;
-    examCode?: string | null;
-}): ParsedQuestionSource {
-    const questionNumber = (q.questionNumber ?? q.examCode ?? '').trim();
-    const explicitYear = normalizeYear(q.sourceYear);
-    const explicitGrade = normalizeGrade(q.sourceGrade);
-    const explicitMonth = normalizeMonth(q.sourceMonth);
-
-    if (explicitYear || explicitGrade || explicitMonth) {
-        return {
-            sourceYear: explicitYear,
-            sourceGrade: explicitGrade,
-            sourceMonth: explicitMonth,
-            questionNumber,
-        };
-    }
-
-    let remaining = (q.targetGrade ?? '').trim();
+function parseLegacyTargetGrade(targetGrade: string): ParsedQuestionSource {
+    let remaining = targetGrade.trim();
     let sourceYear = '';
     let sourceGrade = '';
     let sourceMonth = '';
+    let sourceNumber = '';
 
-    if (remaining) {
-        const fullYearMatch = remaining.match(/(20\d{2})\s*(?:학년도|년)?/);
-        if (fullYearMatch) {
-            sourceYear = fullYearMatch[1];
-            remaining = remaining.replace(fullYearMatch[0], ' ');
-        } else {
-            const shortYearMatch = remaining.match(/(?:^|\s)(\d{2})\s*년(?=\s|$)/);
-            if (shortYearMatch) {
-                sourceYear = `20${shortYearMatch[1]}`;
-                remaining = remaining.replace(shortYearMatch[0], ' ');
-            }
-        }
+    if (!remaining) {
+        return { sourceYear, sourceGrade, sourceMonth, sourceNumber };
+    }
 
-        const gradeMatch = remaining.match(/(?:고\s*([1-3])(?:\s*학년)?|([1-3])\s*학년)/);
-        if (gradeMatch) {
-            const digit = gradeMatch[1] || gradeMatch[2];
-            sourceGrade = `고${digit}`;
-            remaining = remaining.replace(gradeMatch[0], ' ');
-        }
-
-        const monthMatch = remaining.match(/(1[0-2]|0?[1-9])\s*월/);
-        if (monthMatch) {
-            sourceMonth = `${Number(monthMatch[1])}월`;
-            remaining = remaining.replace(monthMatch[0], ' ');
-        } else {
-            const csatMatch = remaining.match(/(?:^|[\s,])(대학수학능력시험|대수능|수능)(?=[\s,]|$)/);
-            if (csatMatch) {
-                sourceMonth = '수능';
-                remaining = remaining.replace(csatMatch[1], ' ');
-            }
-        }
-
-        const leftover = remaining.replace(/\s+/g, ' ').trim();
-        if (!sourceMonth && leftover) {
-            sourceMonth = leftover;
+    const fullYearMatch = remaining.match(/(20\d{2})\s*(?:학년도|년)?/);
+    if (fullYearMatch) {
+        sourceYear = fullYearMatch[1];
+        remaining = remaining.replace(fullYearMatch[0], ' ');
+    } else {
+        const shortYearMatch = remaining.match(/(?<!\d)(\d{2})\s*(?:학년도|년)/);
+        if (shortYearMatch) {
+            sourceYear = `20${shortYearMatch[1]}`;
+            remaining = remaining.replace(shortYearMatch[0], ' ');
         }
     }
 
-    if (!sourceYear && q.examCode) {
-        const examYearMatch = q.examCode.trim().match(/^(20\d{2})(?=[-.\s]|$)/);
-        if (examYearMatch) {
-            sourceYear = examYearMatch[1];
+    const gradeMatch = remaining.match(/(?:고\s*([1-3])(?:\s*학년)?|(?<!\d)([1-3])\s*학년)/);
+    if (gradeMatch) {
+        const digit = gradeMatch[1] || gradeMatch[2];
+        sourceGrade = `고${digit}`;
+        remaining = remaining.replace(gradeMatch[0], ' ');
+    }
+
+    const monthMatch = remaining.match(/(?<!\d)(1[0-2]|0?[1-9])\s*월/);
+    if (monthMatch) {
+        sourceMonth = `${Number(monthMatch[1])}월`;
+        remaining = remaining.replace(monthMatch[0], ' ');
+    } else {
+        const csatMatch = remaining.match(/(대학수학능력시험|대수능|수능)(?!특강|완성)/);
+        if (csatMatch) {
+            sourceMonth = '수능';
+            remaining = remaining.replace(csatMatch[1], ' ');
+        }
+    }
+
+    if (sourceYear || sourceGrade || sourceMonth) {
+        remaining = remaining.replace(/(?:전국연합학력평가|전국연합|학력평가|모의평가|모의고사|평가원|모평|학평)/g, ' ');
+    }
+
+    const explicitNumMatch = remaining.match(/(?:문항\s*)?(?:#|No\.?\s*)?(?<!\d)(\d{1,3}(?:\s*[~-]\s*\d{1,3})?)\s*번/i);
+    if (explicitNumMatch) {
+        sourceNumber = `${explicitNumMatch[1].replace(/\s+/g, '')}번`;
+        remaining = remaining.replace(explicitNumMatch[0], ' ');
+    } else if (sourceYear || sourceGrade || sourceMonth) {
+        const prefixedNumMatch = remaining.match(/(?:#|No\.?\s*)(?<!\d)(\d{1,3}(?:\s*[~-]\s*\d{1,3})?)(?!\d)/i);
+        if (prefixedNumMatch) {
+            sourceNumber = `${prefixedNumMatch[1].replace(/\s+/g, '')}번`;
+            remaining = remaining.replace(prefixedNumMatch[0], ' ');
+        } else {
+            const bareNumMatch = remaining.match(/(?:^|\s)(\d{1,3}(?:\s*[~-]\s*\d{1,3})?)(?=\s|$)/);
+            if (bareNumMatch) {
+                sourceNumber = `${bareNumMatch[1].replace(/\s+/g, '')}번`;
+                remaining = remaining.replace(bareNumMatch[0], ' ');
+            }
+        }
+    }
+
+    const leftover = remaining
+        .replace(/^[\s,·•/|\\-]+|[\s,·•/|\\-]+$/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (leftover) {
+        if (!sourceMonth) {
+            sourceMonth = leftover;
+        } else if (!sourceNumber) {
+            sourceNumber = leftover;
+        } else {
+            sourceMonth = `${sourceMonth} ${leftover}`;
         }
     }
 
@@ -190,21 +209,51 @@ export function parseQuestionSource(q: {
         sourceYear,
         sourceGrade,
         sourceMonth,
-        questionNumber,
+        sourceNumber,
     };
+}
+
+export function parseQuestionSource(q: {
+    sourceYear?: string | null;
+    sourceGrade?: string | null;
+    sourceMonth?: string | null;
+    sourceNumber?: string | null;
+    targetGrade?: string | null;
+}): ParsedQuestionSource {
+    const explicitYear = normalizeYear(q.sourceYear);
+    const explicitGrade = normalizeGrade(q.sourceGrade);
+    const explicitMonth = normalizeMonth(q.sourceMonth);
+    const explicitNumber = normalizeSourceNumber(q.sourceNumber);
+
+    if (explicitYear || explicitGrade || explicitMonth || explicitNumber) {
+        let fallbackNumber = '';
+        if (!explicitNumber && q.sourceNumber === undefined && q.targetGrade) {
+            fallbackNumber = parseLegacyTargetGrade(q.targetGrade).sourceNumber;
+        }
+        return {
+            sourceYear: explicitYear,
+            sourceGrade: explicitGrade,
+            sourceMonth: explicitMonth,
+            sourceNumber: explicitNumber || fallbackNumber,
+        };
+    }
+
+    return parseLegacyTargetGrade(q.targetGrade ?? '');
 }
 
 export function formatSourceSummary(source: {
     sourceYear?: string | null;
     sourceGrade?: string | null;
     sourceMonth?: string | null;
+    sourceNumber?: string | null;
 }): string {
     const year = normalizeYear(source.sourceYear);
     const grade = normalizeGrade(source.sourceGrade);
     const month = normalizeMonth(source.sourceMonth);
+    const num = normalizeSourceNumber(source.sourceNumber);
 
     const yearLabel = year ? (/^\d{4}$/.test(year) ? `${year}년` : year) : '';
-    return [yearLabel, grade, month].filter(Boolean).join(' ');
+    return [yearLabel, grade, month, num].filter(Boolean).join(' ');
 }
 
 export function matchesQuestionNumberFilter(targetNumber: string, filterQuery: string): boolean {

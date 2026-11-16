@@ -2157,7 +2157,8 @@ body {
     }
 
     .teacher-source-grid,
-    .teacher-search-grid {
+    .teacher-search-grid,
+    .teacher-search-subgrid {
         grid-template-columns: 1fr;
     }
 
@@ -2195,7 +2196,8 @@ body {
 .teacher-source-grid .teacher-select,
 .teacher-source-grid .teacher-input-field,
 .teacher-search-grid .teacher-select,
-.teacher-search-grid .teacher-input-field {
+.teacher-search-grid .teacher-input-field,
+.teacher-search-subgrid .teacher-input-field {
     height: 42px;
     padding: 8px 12px;
     border: 1.5px solid #cbd5e1;
@@ -2208,7 +2210,8 @@ body {
 .teacher-source-grid .teacher-select:focus,
 .teacher-source-grid .teacher-input-field:focus,
 .teacher-search-grid .teacher-select:focus,
-.teacher-search-grid .teacher-input-field:focus {
+.teacher-search-grid .teacher-input-field:focus,
+.teacher-search-subgrid .teacher-input-field:focus {
     border-color: #3b82f6;
 }
 
@@ -2450,6 +2453,12 @@ body {
     gap: 10px;
 }
 
+.teacher-search-subgrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
 .teacher-search-tags-area {
     border-top: 1px solid #e2e8f0;
     padding-top: 12px;
@@ -2547,7 +2556,8 @@ body {
 
 @media (max-width: 768px) {
     .teacher-source-grid,
-    .teacher-search-grid {
+    .teacher-search-grid,
+    .teacher-search-subgrid {
         grid-template-columns: 1fr;
     }
 }
@@ -2562,6 +2572,7 @@ body {
     .teacher-source-grid .teacher-input-field,
     .teacher-search-grid .teacher-select,
     .teacher-search-grid .teacher-input-field,
+    .teacher-search-subgrid .teacher-input-field,
     .teacher-custom-tag-input-row .teacher-input-field {
         background: #ffffff;
         color: #1e293b;

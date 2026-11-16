@@ -24,6 +24,8 @@ interface RawRpcQuestion {
     sourceGrade?: string | null;
     source_month?: string | null;
     sourceMonth?: string | null;
+    source_number?: string | null;
+    sourceNumber?: string | null;
     tags?: unknown;
     topic?: string | null;
     logic_flow?: Question['logicFlow'] | null;
@@ -68,27 +70,27 @@ export async function fetchRoomData(code: string): Promise<{
 
         const examCode = q.exam_code || q.examCode || '';
         const rawTargetGrade = q.target_grade || q.targetGrade || '';
+        const rawSourceNumber = (q.source_number ?? q.sourceNumber ?? '').trim() || embedded?.sourceNumber;
         const parsedSource = parseQuestionSource({
             sourceYear: (q.source_year ?? q.sourceYear ?? '').trim() || embedded?.sourceYear,
             sourceGrade: (q.source_grade ?? q.sourceGrade ?? '').trim() || embedded?.sourceGrade,
             sourceMonth: (q.source_month ?? q.sourceMonth ?? '').trim() || embedded?.sourceMonth,
-            questionNumber: embedded?.questionNumber ?? examCode,
+            sourceNumber: rawSourceNumber || undefined,
             targetGrade: rawTargetGrade,
-            examCode,
         });
         const nativeTags = normalizeTags(q.tags);
         const embeddedTags = normalizeTags(embedded?.tags);
         const tags = nativeTags.length > 0 ? nativeTags : embeddedTags;
-        const targetGrade = rawTargetGrade.trim() || formatSourceSummary(parsedSource);
+        const targetGrade = formatSourceSummary(parsedSource) || rawTargetGrade.trim();
 
         return {
             id: q.id,
             examCode,
-            questionNumber: parsedSource.questionNumber || examCode,
             targetGrade,
             sourceYear: parsedSource.sourceYear,
             sourceGrade: parsedSource.sourceGrade,
             sourceMonth: parsedSource.sourceMonth,
+            sourceNumber: parsedSource.sourceNumber,
             tags,
             topic: topicStr,
             logicFlow: cleanFlow,
