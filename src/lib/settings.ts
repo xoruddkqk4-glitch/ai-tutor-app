@@ -5,15 +5,37 @@ export interface TeacherSettings {
     system_prompt: string | null;
     drive_folder_id: string | null;
     google_script_url: string | null;
+    max_questions: number | null;
 }
 
 export async function getTeacherSettings(teacherId: string): Promise<TeacherSettings> {
     console.log('Fetching settings for ID:', teacherId);
     const { data, error } = await supabase
         .from('teachers')
-        .select('openai_api_key, system_prompt, drive_folder_id, google_script_url')
+        .select('openai_api_key, system_prompt, drive_folder_id, google_script_url, max_questions')
         .eq('id', teacherId)
         .single();
+
+    if (error && error.message?.includes('max_questions')) {
+        const fallback = await supabase
+            .from('teachers')
+            .select('openai_api_key, system_prompt, drive_folder_id, google_script_url')
+            .eq('id', teacherId)
+            .single();
+
+        if (fallback.error) {
+            console.error('getTeacherSettings error:', fallback.error);
+            throw fallback.error;
+        }
+
+        return {
+            openai_api_key: fallback.data.openai_api_key,
+            system_prompt: fallback.data.system_prompt,
+            drive_folder_id: fallback.data.drive_folder_id,
+            google_script_url: fallback.data.google_script_url,
+            max_questions: null
+        };
+    }
 
     if (error) {
         console.error('getTeacherSettings error:', error);
@@ -24,7 +46,8 @@ export async function getTeacherSettings(teacherId: string): Promise<TeacherSett
         openai_api_key: data.openai_api_key,
         system_prompt: data.system_prompt,
         drive_folder_id: data.drive_folder_id,
-        google_script_url: data.google_script_url
+        google_script_url: data.google_script_url,
+        max_questions: data.max_questions ?? null
     };
 }
 

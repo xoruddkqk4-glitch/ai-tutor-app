@@ -115,3 +115,30 @@ export function normalizeFlowStepsForSave(steps: LogicFlowStep[]): LogicFlowStep
             conjunction: s.conjunction?.trim() ?? '',
         }));
 }
+
+/**
+ * 문항의 지문 유형이 교과서 지문인지 판별합니다.
+ * passageType이 명시되지 않은 구형 데이터는 주제·논리 흐름이 모두 비어 있을 때 교과서 지문으로 간주합니다.
+ */
+export function isTextbookQuestion(
+    q: { passageType?: 'csat' | 'textbook'; topic?: string; logicFlow?: unknown } | null | undefined
+): boolean {
+    if (!q) return false;
+    if (q.passageType === 'textbook') return true;
+    if (q.passageType === 'csat') return false;
+    const hasTopic = Boolean(q.topic && q.topic.trim());
+    const hasFlow = safeParseLogicFlow(q.logicFlow).length > 0;
+    return !hasTopic && !hasFlow;
+}
+
+/**
+ * 논리 흐름 배열/문자열을 읽기 쉬운 한 줄 요약으로 변환합니다.
+ */
+export function summarizeLogicFlow(logicFlow: unknown, isTextbook = false): string {
+    if (isTextbook) return '해당 없음 (교과서 지문)';
+    const steps = safeParseLogicFlow(logicFlow);
+    if (steps.length === 0) return '-';
+    return steps
+        .map((s) => `[${s.role?.trim() || s.macroLabel?.trim() || '단계'}] ${s.content}`)
+        .join(' → ');
+}

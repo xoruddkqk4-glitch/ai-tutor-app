@@ -1,13 +1,30 @@
 import { supabase } from './supabase'
+import type { Student } from '../types'
 
-export interface Student {
+export type { Student }
+
+interface StudentRow {
     id: number
-    teacher_id: string
-    class: string
-    number: string
-    name: string
-    competency: string
+    teacher_id?: string
+    class: string | null
+    number: string | number | null
+    name: string | null
+    competency: string | null
     created_at?: string
+}
+
+function mapStudentRow(row: StudentRow): Student {
+    const className = String(row.class ?? '')
+    return {
+        id: row.id,
+        teacher_id: row.teacher_id,
+        class: className,
+        className,
+        number: String(row.number ?? ''),
+        name: String(row.name ?? ''),
+        competency: String(row.competency ?? '중'),
+        created_at: row.created_at,
+    }
 }
 
 /**
@@ -24,13 +41,13 @@ export async function getStudents(): Promise<Student[]> {
         .order('class, number', { ascending: true })
 
     if (error) throw error
-    return data || []
+    return ((data || []) as StudentRow[]).map(mapStudentRow)
 }
 
 /**
  * 학생 일괄 등록
  */
-export async function createStudents(students: Omit<Student, 'id' | 'teacher_id' | 'created_at'>[]): Promise<Student[]> {
+export async function createStudents(students: Omit<Student, 'id' | 'teacher_id' | 'created_at' | 'className'>[]): Promise<Student[]> {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('로그인이 필요합니다')
 
@@ -48,7 +65,7 @@ export async function createStudents(students: Omit<Student, 'id' | 'teacher_id'
         .select()
 
     if (error) throw error
-    return data || []
+    return ((data || []) as StudentRow[]).map(mapStudentRow)
 }
 
 /**

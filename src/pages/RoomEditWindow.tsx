@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { getQuestions } from '../lib/questions';
 import { getStudents } from '../lib/students';
 import { getRoomById, updateRoom, getRoomQuestionIds, createRoom } from '../lib/rooms';
+import { getErrorMessage } from '../lib/errors';
+import { isTextbookQuestion, summarizeLogicFlow } from '../lib/logic-flow';
 import type { Room, Question } from '../types';
 import { Save, Loader2, X } from 'lucide-react';
 
@@ -47,9 +49,9 @@ export default function RoomEditWindow() {
                 setRoom({ id: 0, code: '', className: '', folderName: '', isActive: true, createdAt: '' });
             }
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            alert('데이터 로드 실패: ' + error.message);
+            alert('데이터 로드 실패: ' + getErrorMessage(error));
             window.close();
         } finally {
             setIsLoading(false);
@@ -70,11 +72,11 @@ export default function RoomEditWindow() {
             }
 
             if (window.opener) {
-                window.opener.postMessage('roomUpdated', '*');
+                window.opener.postMessage('roomUpdated', window.location.origin);
             }
             window.close();
-        } catch (e: any) {
-            alert('저장 실패: ' + e.message);
+        } catch (e: unknown) {
+            alert('저장 실패: ' + getErrorMessage(e));
         }
     };
 
@@ -101,7 +103,7 @@ export default function RoomEditWindow() {
     if (!room) return null;
 
     return (
-        <div style={{ padding: '24px', background: 'white', minHeight: '100vh', fontFamily: "'Noto Sans KR', sans-serif" }}>
+        <div style={{ padding: '24px', background: 'white', color: '#1e293b', minHeight: '100vh', fontFamily: "'Noto Sans KR', sans-serif" }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid #eee', paddingBottom: '16px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
                     {room.id === 0 ? '새 수업 시작 (방 만들기)' : '수업 방 수정'}
@@ -138,43 +140,54 @@ export default function RoomEditWindow() {
             <div className="teacher-input-group" style={{ marginBottom: '24px' }}>
                 <label className="teacher-label" style={{ display: 'block', marginBottom: '8px', fontWeight: 'bold' }}>문항 선택 ({selectedQuestions.length}개 선택됨)</label>
                 <div style={{ maxHeight: 'calc(100vh - 250px)', overflowY: 'auto', border: '1px solid #ddd', borderRadius: '10px', padding: '12px' }}>
-                    {questions.map(q => (
-                        <div
-                            key={q.id}
-                            onClick={() => toggleQuestionSelection(q.id)}
-                            style={{
-                                padding: '12px',
-                                marginBottom: '8px',
-                                borderRadius: '8px',
-                                border: selectedQuestions.includes(q.id) ? '2px solid #3b82f6' : '1px solid #e5e5e5',
-                                background: selectedQuestions.includes(q.id) ? '#eff6ff' : 'white',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '12px'
-                            }}
-                        >
-                            <input
-                                type="checkbox"
-                                checked={selectedQuestions.includes(q.id)}
-                                onChange={() => { }}
-                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                            />
-                            <div style={{ flex: 1 }}>
-                                <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>
-                                    <span className="teacher-badge teacher-badge-info" style={{
-                                        display: 'inline-block', padding: '2px 8px', borderRadius: '999px',
-                                        background: '#dbeafe', color: '#1e40af', fontSize: '12px', marginRight: '8px'
-                                    }}>{q.examCode}</span>
-                                    {q.topic}
-                                </div>
-                                <div style={{ fontSize: '12px', color: '#666' }}>
-                                    출처: {q.targetGrade || '-'} • {typeof q.logicFlow === 'string' ? q.logicFlow : JSON.stringify(q.logicFlow)}
+                    {questions.map(q => {
+                        const isTextbook = isTextbookQuestion(q);
+                        return (
+                            <div
+                                key={q.id}
+                                onClick={() => toggleQuestionSelection(q.id)}
+                                style={{
+                                    padding: '12px',
+                                    marginBottom: '8px',
+                                    borderRadius: '8px',
+                                    border: selectedQuestions.includes(q.id) ? '2px solid #3b82f6' : '1px solid #e5e5e5',
+                                    background: selectedQuestions.includes(q.id) ? '#eff6ff' : 'white',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px'
+                                }}
+                            >
+                                <input
+                                    type="checkbox"
+                                    checked={selectedQuestions.includes(q.id)}
+                                    onChange={() => { }}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                                        <span className="teacher-badge teacher-badge-info" style={{
+                                            display: 'inline-block', padding: '2px 8px', borderRadius: '999px',
+                                            background: '#dbeafe', color: '#1e40af', fontSize: '12px'
+                                        }}>{q.examCode}</span>
+                                        <span style={{
+                                            display: 'inline-block', padding: '2px 8px', borderRadius: '999px',
+                                            background: isTextbook ? '#dcfce7' : '#ede9fe',
+                                            color: isTextbook ? '#166534' : '#5b21b6',
+                                            fontSize: '11px', fontWeight: '700'
+                                        }}>
+                                            {isTextbook ? '[교과서]' : '[수능형]'}
+                                        </span>
+                                        <span>{q.topic || (isTextbook ? '(교과서 지문)' : '(주제 미입력)')}</span>
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#666' }}>
+                                        출처: {q.targetGrade || '-'} • {summarizeLogicFlow(q.logicFlow, isTextbook)}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
 

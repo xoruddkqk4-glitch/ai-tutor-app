@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { Student, Question } from '../types';
+import type { Student, Question, RoomPublicInfo } from '../types';
 
 import { fetchRoomData } from '../lib/public-api';
 import {
@@ -7,8 +7,12 @@ import {
     hasMacroRefinement,
     getMacroOrderedLabels,
     getMacroBlocksDescription,
+    isTextbookQuestion,
 } from '../lib/logic-flow';
-import { Send, User, Bot, Users, ArrowLeft, CheckSquare, Square } from 'lucide-react';
+import { canUseRoomAi, requestAiCompletion, type ChatApiMessage } from '../lib/ai';
+import { splitEnglishSentences } from '../lib/text';
+import { getErrorMessage } from '../lib/errors';
+import { Send, User, Bot, Users, ArrowLeft, CheckSquare, Square, BookOpen, SlidersHorizontal } from 'lucide-react';
 
 type FAQItem = { type: 'single'; text: string } | { type: 'group'; label: string; items: string[] };
 
@@ -43,21 +47,11 @@ function getFlatFAQIndex(): { text: string; isSentenceModal: boolean }[] {
 }
 const FLAT_FAQ = getFlatFAQIndex();
 
-function isTextbookPassage(q: Question | null): boolean {
-    if (!q) return false;
-    if (q.passageType === 'textbook') return true;
-    if (q.passageType === 'csat') return false;
-    const hasTopic = Boolean(q.topic && q.topic.trim());
-    const parsedFlow = safeParseLogicFlow(q.logicFlow);
-    const hasFlow = parsedFlow.length > 0;
-    return !hasTopic && !hasFlow;
-}
-
 function buildSocraticStrictForPartCount(partCount: number, repeatNotice: string): string {
     return `\n\n[답변 방식 - 절대 준수 사항]\n너는 교사가 제공한 데이터(우리말 주제, 논리 흐름)의 정답을 이미 알고 있는 튜터야. 하지만 학생은 정답을 모르는 상태야. 너의 역할은 학생이 스스로 정답을 찾아낼 수 있도록 유도하는 것이야.\n\n[최우선 규칙 - 교사 데이터 절대 준수 (STRICT ENFORCEMENT)]\n★ 이 지문이 너의 사견으로 '나눌 부분이 없다'거나 '하나의 흐름이다'라고 판단되더라도, 절대 그렇게 답변하지 마세요. 이는 중대한 오류로 간주됩니다.\n★ 반드시 교사가 설정한 ${partCount}부분 구조가 존재한다고 전제하고 답변하세요.\n★ 네가 지문을 자체적으로 분석해서 다른 부분 수나 다른 구조를 만들어내면 절대 안 돼.\n★ 교사 데이터가 ${partCount}부분이면 반드시 '${partCount}부분'으로 답변해야 해. (구조가 모호하다거나 하나라고 답하지 마)\n★ 네 자체 판단을 교사 데이터보다 우선시하지 마.\n\n기타 규칙:\n1. 교사 데이터의 정답을 직접 말하지 마 (4단계 제외).\n2. 학생이 정답에 접근하도록 지문의 특정 부분을 짚어주거나 유도 질문을 던져.\n3. 위의 [힌트 수준] 지시를 반드시 따라. 각 단계의 구체성 수준을 정확히 지켜.${repeatNotice}`;
 }
 
-export default function StudentChatInterface() {
+export default function StudentChatInterface({ onBack }: { onBack?: () => void } = {}) {
     // Helper for bold text
     const formatMessage = (content: string) => {
         const parts = content.split('**');
@@ -71,22 +65,13 @@ export default function StudentChatInterface() {
     const [roomNumber, setRoomNumber] = useState('');
 
     // Data from API
-    type RoomInfo = {
-        id: number;
-        class_name: string;
-        drive_folder_id?: string;
-        google_script_url?: string;
-        api_key?: string;
-        system_prompt?: string;
-    };
-    const [roomInfo, setRoomInfo] = useState<RoomInfo | null>(null);
+    const [roomInfo, setRoomInfo] = useState<RoomPublicInfo | null>(null);
     const [allStudents, setAllStudents] = useState<Student[]>([]);
     const [roomQuestions, setRoomQuestions] = useState<Question[]>([]);
 
     // Selected User Info (Multi-Select)
     const [selectedStudents, setSelectedStudents] = useState<Student[]>([]);
 
-    // Chat State
     // Chat State
     type Message = { role: 'user' | 'assistant' | 'system'; content: string; isGroup?: boolean; context?: string; repeatCount?: number };
     const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(null);
@@ -96,10 +81,12 @@ export default function StudentChatInterface() {
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
-    // Modals
+    // Modals & UI Toggles
     const [showStudentModal, setShowStudentModal] = useState(false);
     const [showQuestionModal, setShowQuestionModal] = useState(false);
     const [showSentenceModal, setShowSentenceModal] = useState(false);
+    const [showPassagePanel, setShowPassagePanel] = useState(false);
+    const [showMobileSidebar, setShowMobileSidebar] = useState(false);
 
     // Sentence Modal (FAQ 4)
     const [sentences, setSentences] = useState<string[]>([]);
@@ -119,10 +106,9 @@ export default function StudentChatInterface() {
     // Split passage
     useEffect(() => {
         if (selectedQuestion) {
-            const sentenceArray = selectedQuestion.passage
-                .split(/(?<=[.!?])\s+/)
-                .filter(s => s.trim().length > 0);
-            setSentences(sentenceArray);
+            setSentences(splitEnglishSentences(selectedQuestion.passage));
+        } else {
+            setSentences([]);
         }
     }, [selectedQuestion]);
 
@@ -150,9 +136,9 @@ export default function StudentChatInterface() {
             setRoomQuestions(data.questions || []);
 
             setStep('chat');
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            alert('입장 중 오류가 발생했습니다: ' + error.message);
+            alert('입장 중 오류가 발생했습니다: ' + getErrorMessage(error));
         } finally {
             setIsLoading(false);
         }
@@ -202,6 +188,16 @@ export default function StudentChatInterface() {
         }
     };
 
+    const buildConversationHistory = (): ChatApiMessage[] =>
+        messages
+            .filter((m): m is Message & { role: 'user' | 'assistant' } =>
+                !m.context && (m.role === 'user' || m.role === 'assistant')
+            )
+            .map((m) => ({
+                role: m.role,
+                content: m.content,
+            }));
+
     // 3. Send Message
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -224,18 +220,17 @@ export default function StudentChatInterface() {
         const contextString = getContextString(selectedQuestion);
 
         setMessages(prev => [...prev, { role: 'user', content: userMessage, isGroup: isGroupMsg, context: contextString }]);
-        setIsLoading(true);
 
-        if (!roomInfo?.api_key) {
-            setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ API 키 미설정' }]);
-            setIsLoading(false);
+        if (!canUseRoomAi(roomInfo)) {
+            setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ API 키가 설정되지 않았습니다. 담당 선생님께 문의해주세요.' }]);
             return;
         }
 
+        setIsLoading(true);
         try {
-            const systemMessage = {
+            const systemMessage: ChatApiMessage = {
                 role: 'system',
-                content: (roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.') +
+                content: (roomInfo?.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.') +
                     `\n\n[최우선 지침: 교사 정답 데이터 절대 준수]` +
                     `\n1. 너의 개인적인 분석보다 아래 제공된 [문항 정보]의 데이터가 항상 최우선 정답입니다.` +
                     `\n2. 특히 '논리 흐름'의 부분 수와 각 부분의 큰 범주·작은 범주(있는 경우) 라벨을 절대 변경하거나 생략하지 마세요.` +
@@ -243,30 +238,25 @@ export default function StudentChatInterface() {
                     `\n\n${contextString}`
             };
 
-            const apiMessages = [
+            const apiMessages: ChatApiMessage[] = [
                 systemMessage,
-                ...messages.filter(m => !m.context).map(m => ({
-                    role: m.role,
-                    content: m.content
-                })),
+                ...buildConversationHistory(),
                 { role: 'user', content: userMessage }
             ];
 
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${roomInfo.api_key}` },
-                body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
+            const aiContent = await requestAiCompletion({
+                roomCode: roomNumber.trim(),
+                apiKey: roomInfo?.api_key,
+                hasApiKey: roomInfo?.has_api_key,
+                messages: apiMessages,
             });
-
-            const data = await response.json();
-            const aiContent = data.choices?.[0]?.message?.content || "응답 오류";
             const aiMsg: Message = { role: 'assistant', content: aiContent };
             setMessages(prev => [...prev, aiMsg]);
 
             // Real-time save
             saveTurnToGAS(userMessage, aiMsg, isGroupMsg);
-        } catch (error: any) {
-            setMessages(prev => [...prev, { role: 'assistant', content: `오류: ${error.message}` }]);
+        } catch (error: unknown) {
+            setMessages(prev => [...prev, { role: 'assistant', content: `오류: ${getErrorMessage(error)}` }]);
         } finally {
             setIsLoading(false);
         }
@@ -279,7 +269,7 @@ export default function StudentChatInterface() {
             const userMsgObj: Message = { role: 'user', content: userMsgText, isGroup };
 
             const savePromises = selectedStudents.map(student => {
-                const fileName = `[${(student as any).class || student.className || roomInfo.class_name}] ${student.number}번 ${student.name}`;
+                const fileName = `[${student.class || student.className || roomInfo.class_name}] ${student.number}번 ${student.name}`;
                 return fetch(roomInfo.google_script_url!, {
                     method: 'POST',
                     body: JSON.stringify({
@@ -311,7 +301,7 @@ export default function StudentChatInterface() {
         const faqEntry = FLAT_FAQ[index];
         if (!faqEntry) return;
 
-        if (isTextbookPassage(selectedQuestion)) {
+        if (isTextbookQuestion(selectedQuestion)) {
             if (faqEntry.text.includes('우리말 주제') || faqEntry.text.includes('나눈다면') || faqEntry.text.includes('중심 내용과 논리적') || faqEntry.text.includes('영어 연결어')) {
                 alert('교과서 지문에서는 이용할 수 없는 질문입니다.');
                 return;
@@ -492,40 +482,40 @@ export default function StudentChatInterface() {
             }
 
             setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg, context: contextString, repeatCount: currentCount > 1 ? currentCount : undefined }]);
+            setShowMobileSidebar(false);
+
+            if (!canUseRoomAi(roomInfo)) {
+                setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ API 키가 설정되지 않았습니다. 담당 선생님께 문의해주세요.' }]);
+                return;
+            }
+
             setIsLoading(true);
-
-            if (!roomInfo?.api_key) return;
-
             try {
-                const systemMessage = {
+                const systemMessage: ChatApiMessage = {
                     role: 'system',
                     content: `[최우선 지침: 교사 정답 데이터 절대 준수 (STRICT MODE)]\n${contextString}\n\n` +
-                        (roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.') +
+                        (roomInfo?.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.') +
                         `\n\n[주의: 데이터 부정 금지]\n1. 지문의 길이가 짧거나 내용이 긴밀하게 연결되어 있어도, 반드시 위 [문항 정보]에 명시된 부분 수와 구조에 따라 답변해야 합니다.\n2. "나눌 수 없다", "하나의 주제다" 등의 이유로 교사가 정한 구조를 부정하는 것은 엄격히 금지됩니다.\n3. 큰 범주·작은 범주 라벨을 축약하거나 임의로 변경하지 마세요.`
                 };
 
-                const apiMessages = [
+                const apiMessages: ChatApiMessage[] = [
                     systemMessage,
-                    ...messages.filter(m => !m.context).map(m => ({
-                        role: m.role,
-                        content: m.content
-                    })),
+                    ...buildConversationHistory(),
                     { role: 'user', content: aiPrompt }
                 ];
-                const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${roomInfo.api_key}` },
-                    body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
+                const aiContent = await requestAiCompletion({
+                    roomCode: roomNumber.trim(),
+                    apiKey: roomInfo?.api_key,
+                    hasApiKey: roomInfo?.has_api_key,
+                    messages: apiMessages,
                 });
-                const data = await response.json();
-                const aiContent = data.choices?.[0]?.message?.content || "응답 오류";
                 const aiMsg: Message = { role: 'assistant', content: aiContent };
                 setMessages(prev => [...prev, aiMsg]);
 
                 // Real-time save
                 saveTurnToGAS(questionText, aiMsg, isGroupMsg);
-            } catch (error: any) {
-                setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${error.message}` }]);
+            } catch (error: unknown) {
+                setMessages(prev => [...prev, { role: 'assistant', content: `오류: ${getErrorMessage(error)}` }]);
             } finally {
                 setIsLoading(false);
             }
@@ -541,32 +531,42 @@ export default function StudentChatInterface() {
 
         setMessages(prev => [...prev, { role: 'user', content: questionText, isGroup: isGroupMsg, context: contextString }]);
         setShowSentenceModal(false);
+        setShowMobileSidebar(false);
         setSelectedSentenceIndex(null);
-        setIsLoading(true);
 
-        if (!roomInfo?.api_key) return;
+        if (!canUseRoomAi(roomInfo)) {
+            setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ API 키가 설정되지 않았습니다. 담당 선생님께 문의해주세요.' }]);
+            return;
+        }
+
+        setIsLoading(true);
         try {
-            const apiMessages = [
-                { role: 'system', content: roomInfo.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.' },
-                ...messages.map(m => ({
-                    role: m.role,
-                    content: m.context ? `${m.context}\n\n${m.content}` : m.content
-                })),
-                { role: 'user', content: `${contextString}\n\n요청: ${questionText}` }
+            const systemMessage: ChatApiMessage = {
+                role: 'system',
+                content: `${roomInfo?.system_prompt || '너는 친절하고 꼼꼼한 선생님이야.'}\n\n${contextString}`
+            };
+            const apiMessages: ChatApiMessage[] = [
+                systemMessage,
+                ...buildConversationHistory(),
+                { role: 'user', content: `요청: ${questionText}` }
             ];
-            const response = await fetch('https://api.openai.com/v1/chat/completions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${roomInfo.api_key}` },
-                body: JSON.stringify({ model: 'gpt-4o', messages: apiMessages, temperature: 0.7 })
+            const aiContent = await requestAiCompletion({
+                roomCode: roomNumber.trim(),
+                apiKey: roomInfo?.api_key,
+                hasApiKey: roomInfo?.has_api_key,
+                messages: apiMessages,
             });
-            const data = await response.json();
-            const aiMsg: Message = { role: 'assistant', content: data.choices[0].message.content };
+            const aiMsg: Message = { role: 'assistant', content: aiContent };
             setMessages(prev => [...prev, aiMsg]);
 
             // Real-time save
             saveTurnToGAS(questionText, aiMsg, isGroupMsg);
-        } catch (e) { console.error(e); }
-        finally { setIsLoading(false); }
+        } catch (error: unknown) {
+            console.error(error);
+            setMessages(prev => [...prev, { role: 'assistant', content: `오류: ${getErrorMessage(error)}` }]);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleBackToRoom = () => {
@@ -578,6 +578,8 @@ export default function StudentChatInterface() {
         setMessages([]);
         setSelectedStudents([]);
         setSelectedQuestion(null);
+        setShowPassagePanel(false);
+        setShowMobileSidebar(false);
         isNewDocSession.current = true; // Reset session flag
     };
 
@@ -600,7 +602,7 @@ export default function StudentChatInterface() {
         return (
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
                 <button
-                    onClick={() => window.location.href = '/'}
+                    onClick={() => (onBack ? onBack() : (window.location.href = '/'))}
                     style={{
                         position: 'absolute', top: '20px', left: '20px',
                         display: 'flex', alignItems: 'center', gap: '4px',
@@ -709,7 +711,7 @@ export default function StudentChatInterface() {
 
     if (step === 'chat' && roomInfo) {
         const studentsByClass = allStudents.reduce((acc, student) => {
-            const cls = (student as any).class || student.className || '기타';
+            const cls = student.class || student.className || '기타';
             if (!acc[cls]) acc[cls] = [];
             acc[cls].push(student);
             return acc;
@@ -718,6 +720,7 @@ export default function StudentChatInterface() {
 
         // Check if student selected
         const isStudentSelected = selectedStudents.length > 0;
+        const selectedIsTextbook = isTextbookQuestion(selectedQuestion);
 
         return (
             <div className="sc-desktop-layout">
@@ -729,13 +732,80 @@ export default function StudentChatInterface() {
 
                     <div className="sc-chat-title-header">
                         <span>AI Tutor (Room Code: {roomNumber})</span>
+                        {selectedQuestion && (
+                            <button
+                                type="button"
+                                onClick={() => setShowPassagePanel(prev => !prev)}
+                                style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '5px 10px',
+                                    borderRadius: '8px',
+                                    border: '1px solid #cbd5e1',
+                                    background: showPassagePanel ? '#eff6ff' : 'white',
+                                    color: showPassagePanel ? '#1d4ed8' : '#334155',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                <BookOpen size={14} />
+                                {showPassagePanel ? '지문 닫기' : '지문 보기'}
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            className="sc-mobile-controls-toggle"
+                            onClick={() => setShowMobileSidebar(prev => !prev)}
+                        >
+                            <SlidersHorizontal size={14} />
+                            학습 메뉴
+                        </button>
                     </div>
+
+                    {showPassagePanel && selectedQuestion && (
+                        <div style={{
+                            maxHeight: '220px',
+                            overflowY: 'auto',
+                            background: '#f8fafc',
+                            borderBottom: '1px solid #e2e8f0',
+                            padding: '14px 24px',
+                            color: '#1e293b',
+                            flexShrink: 0
+                        }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '8px', fontSize: '12px', fontWeight: 'bold' }}>
+                                <span style={{
+                                    padding: '2px 8px',
+                                    borderRadius: '999px',
+                                    background: selectedIsTextbook ? '#dcfce7' : '#ede9fe',
+                                    color: selectedIsTextbook ? '#166534' : '#5b21b6'
+                                }}>
+                                    {selectedIsTextbook ? '[교과서]' : '[수능형]'}
+                                </span>
+                                <span style={{ color: '#1e40af' }}>문항 번호: {selectedQuestion.examCode}</span>
+                                <span style={{ color: '#64748b' }}>출처: {selectedQuestion.targetGrade || '-'}</span>
+                            </div>
+                            <div style={{ fontSize: '14px', lineHeight: 1.75, whiteSpace: 'pre-wrap', color: '#1e293b' }}>
+                                {selectedQuestion.passage}
+                            </div>
+                        </div>
+                    )}
 
                     <div className="sc-chat-desktop-area">
                         {!selectedQuestion && (
-                            <div style={{ textAlign: 'center', marginTop: '100px', color: '#aaa' }}>
+                            <div style={{ textAlign: 'center', marginTop: '100px', color: '#64748b' }}>
                                 <div style={{ fontSize: '32px', marginBottom: '20px' }}>👉</div>
-                                <div>오른쪽에서 학생과 문항을 선택해주세요.</div>
+                                <div>오른쪽(모바일은 상단 학습 메뉴)에서 학생과 문항을 선택해주세요.</div>
+                                <button
+                                    type="button"
+                                    className="sc-mobile-controls-toggle"
+                                    onClick={() => setShowMobileSidebar(true)}
+                                    style={{ margin: '14px auto 0', padding: '8px 14px' }}
+                                >
+                                    <SlidersHorizontal size={14} />
+                                    학생·문항 선택 열기
+                                </button>
                             </div>
                         )}
 
@@ -777,8 +847,15 @@ export default function StudentChatInterface() {
                     </div>
                 </div>
 
+                {showMobileSidebar && (
+                    <div
+                        className="sc-mobile-backdrop"
+                        onClick={() => setShowMobileSidebar(false)}
+                    />
+                )}
+
                 {/* Right: Sidebar Controls - Compact Mode */}
-                <div className="sc-sidebar-panel" style={{ padding: '12px', gap: '12px' }}>
+                <div className={`sc-sidebar-panel ${showMobileSidebar ? 'mobile-open' : ''}`} style={{ padding: '12px', gap: '12px' }}>
 
                     {/* Student Select (Blue) */}
                     <div className="sc-card sc-card-blue" style={{ padding: '16px' }}>
@@ -816,6 +893,19 @@ export default function StudentChatInterface() {
                         <div className="sc-question-display" style={{ fontSize: '12px', lineHeight: 1.5 }}>
                             {selectedQuestion ? (
                                 <>
+                                    <div style={{ marginBottom: '4px' }}>
+                                        <span style={{
+                                            display: 'inline-block',
+                                            padding: '1px 7px',
+                                            borderRadius: '999px',
+                                            background: selectedIsTextbook ? '#dcfce7' : '#ede9fe',
+                                            color: selectedIsTextbook ? '#166534' : '#5b21b6',
+                                            fontSize: '11px',
+                                            fontWeight: 700
+                                        }}>
+                                            {selectedIsTextbook ? '[교과서]' : '[수능형]'}
+                                        </span>
+                                    </div>
                                     <div>문항 번호: {selectedQuestion.examCode}</div>
                                     <div>출처: {selectedQuestion.targetGrade || '-'}</div>
                                 </>
@@ -829,7 +919,7 @@ export default function StudentChatInterface() {
                         <div className="sc-faq-list" style={{ gap: '6px' }}>
                             {(() => {
                                 let flatIndex = 0;
-                                const isTextbook = isTextbookPassage(selectedQuestion);
+                                const isTextbook = isTextbookQuestion(selectedQuestion);
                                 return FAQ_ITEMS.map((item, itemIdx) => {
                                     if (item.type === 'single') {
                                         const idx = flatIndex++;
@@ -968,17 +1058,33 @@ export default function StudentChatInterface() {
                                 <button className="sc-modal-close-btn" onClick={() => setShowQuestionModal(false)}>&times;</button>
                             </div>
                             <div className="sc-modal-body">
-                                {roomQuestions.map(q => (
-                                    <div
-                                        key={q.id}
-                                        className={`sc-modal-item ${tempQuestion?.id === q.id ? 'selected' : ''}`}
-                                        onClick={() => setTempQuestion(q)}
-                                        style={{ justifyContent: 'center', textAlign: 'center' }}
-                                    >
-                                        <div style={{ fontWeight: 'bold', color: '#2563eb', fontSize: '16px' }}>문항 번호: {q.examCode}</div>
-                                        <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>출처: {q.targetGrade || '-'}</div>
-                                    </div>
-                                ))}
+                                {roomQuestions.map(q => {
+                                    const qIsTextbook = isTextbookQuestion(q);
+                                    return (
+                                        <div
+                                            key={q.id}
+                                            className={`sc-modal-item ${tempQuestion?.id === q.id ? 'selected' : ''}`}
+                                            onClick={() => setTempQuestion(q)}
+                                            style={{ justifyContent: 'center', textAlign: 'center' }}
+                                        >
+                                            <div style={{ marginBottom: '6px' }}>
+                                                <span style={{
+                                                    display: 'inline-block',
+                                                    padding: '2px 8px',
+                                                    borderRadius: '999px',
+                                                    background: qIsTextbook ? '#dcfce7' : '#ede9fe',
+                                                    color: qIsTextbook ? '#166534' : '#5b21b6',
+                                                    fontSize: '11px',
+                                                    fontWeight: 700
+                                                }}>
+                                                    {qIsTextbook ? '[교과서]' : '[수능형]'}
+                                                </span>
+                                            </div>
+                                            <div style={{ fontWeight: 'bold', color: '#2563eb', fontSize: '16px' }}>문항 번호: {q.examCode}</div>
+                                            <div style={{ fontSize: '13px', color: '#64748b', marginTop: '6px' }}>출처: {q.targetGrade || '-'}</div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                             <div className="sc-modal-footer">
                                 <button className="sc-modal-cancel-btn" onClick={() => setShowQuestionModal(false)}>취소</button>

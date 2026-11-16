@@ -5,6 +5,7 @@ import RoomEditWindow from './pages/RoomEditWindow';
 import { GraduationCap, School, Lock } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { updatePassword } from './lib/auth';
+import { getErrorMessage } from './lib/errors';
 
 function App() {
   const [view, setView] = useState<'landing' | 'student' | 'teacher' | 'room-edit' | 'reset-password'>('landing');
@@ -50,8 +51,8 @@ function App() {
     try {
       await updatePassword(newPassword);
       setResetDone(true);
-    } catch (err: any) {
-      setResetError('비밀번호 변경 실패: ' + (err.message || '다시 시도해주세요.'));
+    } catch (err: unknown) {
+      setResetError('비밀번호 변경 실패: ' + getErrorMessage(err, '다시 시도해주세요.'));
     } finally {
       setResetLoading(false);
     }
@@ -134,7 +135,8 @@ function App() {
                     style={{
                       width: '100%', padding: '12px 14px',
                       border: '1.5px solid #e5e7eb', borderRadius: '8px',
-                      fontSize: '15px', outline: 'none', boxSizing: 'border-box'
+                      fontSize: '15px', outline: 'none', boxSizing: 'border-box',
+                      color: '#1e293b', background: 'white'
                     }}
                   />
                 </div>
@@ -151,7 +153,8 @@ function App() {
                     style={{
                       width: '100%', padding: '12px 14px',
                       border: '1.5px solid #e5e7eb', borderRadius: '8px',
-                      fontSize: '15px', outline: 'none', boxSizing: 'border-box'
+                      fontSize: '15px', outline: 'none', boxSizing: 'border-box',
+                      color: '#1e293b', background: 'white'
                     }}
                   />
                 </div>
@@ -189,7 +192,7 @@ function App() {
   if (view === 'student') {
     return (
       <div style={{ background: '#e5e5e5', minHeight: '100vh' }}>
-        <StudentChatInterface />
+        <StudentChatInterface onBack={() => setView('landing')} />
       </div>
     );
   }

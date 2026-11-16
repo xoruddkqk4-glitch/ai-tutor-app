@@ -1,6 +1,24 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Utility classes replacing unused Tailwind v3 directives */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+.text-blue-600 {
+    color: #2563eb;
+}
+
+.text-gray-300 {
+    color: #d1d5db;
+}
 
 /* Global Styles */
 * {
@@ -1653,6 +1671,9 @@ body {
     border: 1px solid #d1d5db;
     border-radius: 12px;
     font-size: 14px;
+    background: white;
+    color: #1e293b;
+    color-scheme: light;
 }
 
 .sc-input:focus {
@@ -1951,7 +1972,28 @@ body {
 @media (prefers-color-scheme: dark) {
     body {
         background: #111827;
-        color: #e5e5e5;
+        color: #1e293b;
+    }
+
+    .teacher-login-box,
+    .teacher-content-card,
+    .teacher-room-card,
+    .teacher-question-card,
+    .teacher-sidebar,
+    .modal-content,
+    .sc-main-panel,
+    .sc-sidebar-panel,
+    .sc-modal-box,
+    .sc-modal-item,
+    .landing-card {
+        color: #1e293b;
+    }
+
+    input,
+    textarea,
+    select {
+        color: #1e293b;
+        color-scheme: light;
     }
 
     .sc-save-exit-btn {
@@ -1964,34 +2006,6 @@ body {
         background: rgba(55, 65, 81, 1);
     }
 }
-
-/* Chat Overrides for Desktop */
-.sc-chat-desktop-area {
-    flex: 1;
-    overflow-y: auto;
-    padding: 80px 40px 40px 40px;
-    /* Top padding for Save btn */
-}
-
-.sc-input-desktop-area {
-    padding: 24px;
-    background: white;
-    border-top: 1px solid #eee;
-}
-
-.sc-chat-title-header {
-    text-align: center;
-    padding: 20px;
-    background: #f9fafb;
-    border-bottom: 1px solid #eee;
-    font-size: 18px;
-    font-weight: bold;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 10px;
-}
-
 
 /* Student Interface - Final Scroll Adjustments */
 .sc-desktop-layout {
@@ -2007,6 +2021,7 @@ body {
 
 .sc-main-panel {
     background: white;
+    color: #1e293b;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -2018,6 +2033,7 @@ body {
 .sc-sidebar-panel {
     padding: 20px;
     background: #fff;
+    color: #1e293b;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -2040,6 +2056,7 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
+    gap: 10px;
     height: 60px;
 }
 
@@ -2049,8 +2066,7 @@ body {
     overflow-y: auto;
     /* Independent scroll */
     padding: 20px 40px;
-    padding-top: 70px;
-    /* Space for absolute Save button */
+    padding-top: 24px;
     display: flex;
     flex-direction: column;
 }
@@ -2061,4 +2077,82 @@ body {
     background: white;
     border-top: 1px solid #e5e7eb;
     margin-bottom: 0;
+}
+
+.sc-mobile-controls-toggle {
+    display: none;
+}
+
+.sc-mobile-backdrop {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .sc-desktop-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sc-main-panel {
+        border-right: none;
+    }
+
+    .sc-save-exit-btn {
+        top: 13px;
+        left: 12px;
+        padding: 6px 10px;
+    }
+
+    .sc-chat-title-header {
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 10px 12px 10px 96px;
+        font-size: 13px;
+    }
+
+    .sc-chat-desktop-area {
+        padding: 16px;
+    }
+
+    .sc-mobile-controls-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 5px 10px;
+        border-radius: 8px;
+        border: 1px solid #cbd5e1;
+        background: white;
+        color: #1e293b;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        flex-shrink: 0;
+    }
+
+    .sc-sidebar-panel {
+        display: none;
+    }
+
+    .sc-sidebar-panel.mobile-open {
+        display: flex;
+        position: fixed;
+        top: 60px;
+        right: 0;
+        bottom: 0;
+        height: calc(100vh - 60px);
+        width: min(330px, 88vw);
+        z-index: 45;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18);
+    }
+
+    .sc-mobile-backdrop {
+        display: block;
+        position: fixed;
+        inset: 60px 0 0 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 40;
+    }
+
+    .teacher-grid-2 {
+        grid-template-columns: 1fr;
+    }
 }

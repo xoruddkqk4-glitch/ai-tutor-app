@@ -1,10 +1,22 @@
 export type Student = {
   id: number;
-  number: number;
+  teacher_id?: string;
+  class: string; // 학급 정보 (DB 컬럼 및 기본 필드)
+  className?: string; // 호환용 학급 별칭
+  number: string;
   name: string;
   competency: string; // 상, 중, 하 등 역량 정보
-  className?: string; // 학급 정보 (예: '1반', '2반')
-  class?: string; // RPC returns this
+  created_at?: string;
+};
+
+export type RoomPublicInfo = {
+  id: number;
+  class_name: string;
+  drive_folder_id?: string;
+  google_script_url?: string;
+  api_key?: string;
+  has_api_key?: boolean;
+  system_prompt?: string;
 };
 
 export type ClassInfo = {
