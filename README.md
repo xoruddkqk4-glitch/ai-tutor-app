@@ -9,9 +9,9 @@
 - **수업 관리**: 수업 방(Room)을 생성하고 관리하며, 접속 코드를 발급합니다.
 - **학생 관리**: 학생 명단을 개별 또는 일괄(엑셀 붙여넣기 방식)로 등록 및 관리합니다.
 - **학습 자료 관리**:
-  - **출처 4분할(년도·학년·월/시기·문항 번호)** 드롭다운 및 직접 입력 전환, 지문(Passage), **문항 태그**, 우리말 주제, **논리 흐름** 등을 등록합니다.
+  - **수업용 문항 번호(`examCode`)**를 독립 항목으로 유지하면서, **출처 4분할(년도·학년·월/시기·출처 문항 번호 `sourceNumber`)** 드롭다운 및 직접 입력 전환, 지문(Passage), **문항 태그**, 우리말 주제, **논리 흐름** 등을 등록합니다.
   - **문항 태그**: 기본 구분(`논리지문`, `반전지문`, `반론지문`, `문제와해결책`), 추가 태그(`예시`, `인용`, `실험`, `비유`, `대조`), 그리고 사용자가 직접 문구를 추가·재사용할 수 있는 커스텀 태그를 지원합니다.
-  - **통합 다중 검색·필터**: 년도·학년·월/시기·문항 번호 개별 필터, 지문 유형(`전체`/`수능형`/`교과서`), 주제·본문 키워드, 다중 태그(`모두 포함 AND` / `하나 이상 OR` 전환)로 문항을 효율적으로 검색할 수 있습니다.
+  - **통합 다중 검색·필터**: 출처 년도·학년·월/시기·출처 문항 번호 개별 필터, 수업 문항 번호 필터, 지문 유형(`전체`/`수능형`/`교과서`), 주제·본문 키워드, 다중 태그(`모두 포함 AND` / `하나 이상 OR` 전환)로 문항을 효율적으로 검색할 수 있습니다.
   - **논리 흐름 (순서대로 입력)**  
     - **큰 범주(필수)**: 각 단계마다 입력합니다. 예: 도입, 주제, 설명, 구체적 설명, 결론 등.  
     - **작은 범주(선택)**: 더 잘게 나눌 때만 입력합니다(예: 설명1, 설명2).  
@@ -111,10 +111,13 @@ supabase/
 ## 📋 최근 작업 및 변경 이력 (Recent Updates)
 
 ### 2026-11-16
+- **수업용 문항 번호(`examCode`) 유지 및 출처 문항 번호(`sourceNumber`) 분리·보존**:
+  - 수업용 문항 번호(`examCode`)를 단독 입력·검색·표시 항목으로 유지하고, 출처의 문항 번호(`sourceNumber`)를 년도·학년·월/시기와 동일한 4개 독립 항목으로 분리
+  - 기존 자유 출처 문자열(`target_grade`) 내 출처 문항 번호(예: `29번`, `41~42번` 등) 무손실 파싱·정규화 및 `source_number` 컬럼·폴백 메타(`__meta.sourceNumber`) 저장·조회 반영
 - **학습 자료 관리 출처 4분할·문항 태그 및 다중 검색 필터 추가**:
-  - 출처 입력·검색을 년도, 학년, 월/시기, 문항 번호 4분할 구조(프리셋 드롭다운 + 직접 입력 전환)로 개편하고 기존 자유 출처 문자열 자동 파싱·호환 지원
+  - 출처 입력·검색을 년도, 학년, 월/시기, 출처 문항 번호 4분할 구조(프리셋 드롭다운 + 직접 입력 전환)로 개편하고 기존 자유 출처 문자열 자동 파싱·호환 지원
   - 기본 구분(`논리지문`, `반전지문`, `반론지문`, `문제와해결책`), 추가(`예시`, `인용`, `실험`, `비유`, `대조`), 사용자 직접 추가 태그 및 다중 검색 필터(`AND`/`OR` 전환, 키워드·유형 필터) 구현
-  - 신규 컬럼(`source_year`, `source_grade`, `source_month`, `tags`) 우선 저장 및 미적용 DB용 `logic_flow` 메타 폴백 처리, 마이그레이션 SQL(`supabase/sql/phase5_question_source_and_tags.sql`) 추가
+  - 신규 컬럼(`source_year`, `source_grade`, `source_month`, `source_number`, `tags`) 우선 저장 및 미적용 DB용 `logic_flow` 메타 폴백 처리, 마이그레이션 SQL(`supabase/sql/phase5_question_source_and_tags.sql`) 추가
 - **보안·런타임 버그 보완, 타입/ESLint 정비 및 UI/UX 개선**:
   - 교사 개별 문항 제한수(`max_questions`) 실제 적용, 문항 카드/방 편집 창/학생 모달의 `[수능형]`·`[교과서]` 구분 배지 및 논리 흐름 요약 표시 복구
   - OpenAI 호출 모듈(`src/lib/ai.ts`) 통합 및 API 키 미설정 시 로딩 고정 버그 수정, 학생 ID 기반 삭제, 영어 약어 문장 오분리 방지(`src/lib/text.ts`), 팝업 `postMessage` `origin` 검증 적용
@@ -168,6 +171,15 @@ This project is private and for educational use only.
   - **문항 태그 시스템 도입 (`src/lib/question-meta.ts`, `src/pages/TeacherAdminDashboard.tsx`, `src/pages/RoomEditWindow.tsx`)**: 기본 지문 구분(`논리지문`, `반전지문`, `반론지문`, `문제와해결책`), 추가 전개·표현 태그(`예시`, `인용`, `실험`, `비유`, `대조`), 사용자 직접 문구 추가(쉼표 다중 입력·한글 IME 중복 방지·교사별 사용자 태그 풀 보관 및 삭제) 구현, 문항 카드 및 수업 방 편집 창에 카테고리별 태그 배지 표시
   - **학습 자료 다중 검색·필터 패널 (`src/pages/TeacherAdminDashboard.tsx`, `src/index.css`)**: 년도·학년·월/시기(보유 문항 수 표시)·문항 번호·지문 유형(`전체/수능형/교과서`)·주제/본문 키워드·다중 태그(`모두 포함 AND` / `하나 이상 OR` 전환) 검색 및 카드 태그 클릭 필터링·초기화 UI/반응형/다크모드 스타일 추가
   - **무중단 DB 영속성 및 마이그레이션 SQL (`src/lib/questions.ts`, `src/lib/logic-flow.ts`, `src/lib/public-api.ts`, `supabase/sql/phase5_question_source_and_tags.sql`)**: 신규 컬럼(`source_year`, `source_grade`, `source_month`, `tags`) 우선 저장 및 미적용 DB 환경용 `logic_flow` 메타 엔트리(`__meta`) 자동 폴백·정제 처리, 네이티브 전환용 SQL 스크립트 추가
+- **검증 결과**:
+  - `npx tsc --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+
+## [2026-11-16 16:02] 업데이트 이력 (Commit ID: `106d967`)
+- **수정 내용**:
+  - **수업용 문항 번호(`examCode`)와 출처 문항 번호(`sourceNumber`) 독립 분리 (`src/types/index.ts`, `src/lib/logic-flow.ts`, `src/pages/TeacherAdminDashboard.tsx`, `src/index.css`)**: 수업을 위한 문항 번호(`examCode`) 입력란을 기존과 동일하게 단독 유지하고, 출처 영역을 `[년도, 학년, 월/시기, 문항 번호(sourceNumber)]` 4개 독립 항목으로 분리하여 입력·검색(`출처 문항 번호` 및 `수업 문항 번호` 개별 필터)·카드 배지 표시 전 과정에서 모두 유지되도록 개선
+  - **기존 자유 문자열 출처 내 문항 번호 무손실 파싱 (`src/lib/question-meta.ts`)**: `normalizeSourceNumber` 및 `parseLegacyTargetGrade`를 도입해 기존 `target_grade` 문자열(예: `"2024 고2 9월 29번"`, `"24년고2 9월29번"`, `"2025 수능 31"`, `"41~42번"`)에서 출처 문항 번호와 잔여 텍스트가 잘리지 않고 정확히 분리·통합 포맷팅되도록 수정
+  - **DB 네이티브 컬럼·폴백 메타 및 SQL 스크립트 갱신 (`src/lib/questions.ts`, `src/lib/public-api.ts`, `supabase/sql/phase5_question_source_and_tags.sql`)**: `source_number` 컬럼 우선 저장 및 `logic_flow` 내 `__meta.sourceNumber` 폴백 저장·조회, `phase5` 마이그레이션 SQL 및 `get_active_room_data` RPC 반환 필드 반영
 - **검증 결과**:
   - `npx tsc --noEmit`: 통과 (타입 에러 0건)
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
