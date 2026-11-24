@@ -229,3 +229,21 @@ This project is private and for educational use only.
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
   - 단위 검증 스크립트(`matchesQuestionNumberFilter`, `parseQuestionSource`, `isMissingQuestionColumnError`): 전체 통과
 
+## [2026-11-24 11:41] 업데이트 이력 (Commit ID: `2d9b45c`)
+- **수정 내용 (Phase C 반영 — 기존 6자리 방 코드·학생 명단 UI 유지)**:
+  - **서버 측 RLS 및 비즈니스 규칙 트리거 추가 (`supabase/sql/phase6_rls_hardening.sql`)**:
+    - `public.is_master()`, `public.is_active_teacher()` 헬퍼 함수 및 `teachers`/`questions`/`app_config`/`students`/`rooms`/`room_questions` RLS 정책 정의
+    - 일반 교사가 클라이언트에서 자신의 `role`, `is_active`, `max_questions`를 변조하지 못하도록 `protect_teacher_privileged_columns` 트리거 추가
+    - 비마스터 교사의 문항 등록 한도(`max_questions` 또는 `app_config.limit_regular_questions`)를 서버에서 강제하는 `enforce_teacher_question_limit` 트리거 추가(P0-2)
+  - **`ai-chat` Edge Function 서버 보호 및 클라이언트 이력 동기화 (`supabase/functions/ai-chat/index.ts`, `src/pages/StudentChatInterface.tsx`)**:
+    - `ALLOWED_ORIGIN` 기반 CORS 설정, 모델 화이트리스트 검증, `messages` 개수(최대 40개)·역할·총 길이(최대 30,000자) 검증, `(roomCode, IP)` 기준 분당 30회 Rate limit 적용(P0-3)
+    - 기존 6자리 방 코드 및 학생 학번·이름은 그대로 유지
+    - 클라이언트 `buildConversationHistory()`에 블록 단위 자르기(`MAX_HISTORY_MESSAGES = 36`, `TRIM_BLOCK_SIZE = 18`)를 적용해 서버 메시지 상한을 준수하면서 프롬프트 앞부분 캐시 적중 유지
+  - **교사 완전 삭제 Edge Function 및 안내 문구 정비 (`supabase/functions/delete-teacher/index.ts`, `src/lib/settings.ts`, `src/pages/TeacherAdminDashboard.tsx`)**:
+    - 마스터 교사가 교사를 삭제할 때 `teachers` 행과 Supabase `auth.users` 계정을 함께 삭제하는 `delete-teacher` Edge Function 추가(미배포 환경은 기존 행 삭제 폴백)(P3-4)
+    - 설정 화면 API 키 안내 문구를 실제 저장·프록시 구조에 맞게 현행화
+- **검증 결과**:
+  - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+  - Edge Function 2종 TS 트랜스파일 검사, 블록 단위 이력 자르기 검증, RLS SQL 구문 검증: 전체 통과
+
