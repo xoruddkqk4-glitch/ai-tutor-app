@@ -149,13 +149,34 @@ export async function updateTeacherMaxQuestions(teacherId: string, maxQuestions:
 }
 
 /**
- * 교사 삭제
+ * 교사 삭제 (Edge Function으로 Auth 계정까지 삭제 시도, 미배포 환경에서는 teachers 행 삭제 폴백)
  */
 export async function deleteTeacher(teacherId: string): Promise<void> {
-    const { error } = await supabase
+    const { data, error } = await supabase.functions.invoke<{ deleted?: boolean; error?: string }>('delete-teacher', {
+        body: { teacherId },
+    });
+
+    if (!error && data?.deleted) return;
+
+    const status = (error as { context?: { status?: number } } | null)?.context?.status;
+    const errName = (error as { name?: string } | null)?.name ?? '';
+    const errMsg = (error?.message || '').toLowerCase();
+    const isUnavailableFunction =
+        status === 404 ||
+        errName === 'FunctionsFetchError' ||
+        errName === 'FunctionsRelayError' ||
+        errMsg.includes('failed to send') ||
+        errMsg.includes('not found') ||
+        errMsg.includes('404');
+
+    if (!isUnavailableFunction && (error || data?.error)) {
+        throw new Error(data?.error || error?.message || '교사 삭제에 실패했습니다.');
+    }
+
+    const { error: fallbackError } = await supabase
         .from('teachers')
         .delete()
         .eq('id', teacherId);
 
-    if (error) throw error;
+    if (fallbackError) throw fallbackError;
 }

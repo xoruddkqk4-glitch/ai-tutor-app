@@ -131,8 +131,11 @@ export default function StudentChatInterface({ onBack }: { onBack?: () => void }
         }
     };
 
-    const buildConversationHistory = (): ChatApiMessage[] =>
-        messages
+    const buildConversationHistory = (): ChatApiMessage[] => {
+        const MAX_HISTORY_MESSAGES = 36;
+        const TRIM_BLOCK_SIZE = 18;
+
+        const allTurns = messages
             .filter((m): m is Message & { role: 'user' | 'assistant' } =>
                 m.role === 'user' || m.role === 'assistant'
             )
@@ -140,6 +143,14 @@ export default function StudentChatInterface({ onBack }: { onBack?: () => void }
                 role: m.role,
                 content: m.content,
             }));
+
+        const excessOffset =
+            allTurns.length > MAX_HISTORY_MESSAGES
+                ? Math.floor((allTurns.length - 1 - MAX_HISTORY_MESSAGES) / TRIM_BLOCK_SIZE + 1) * TRIM_BLOCK_SIZE
+                : 0;
+
+        return excessOffset > 0 ? allTurns.slice(excessOffset) : allTurns;
+    };
 
     // 3. Send Message
     const handleSendMessage = async (e: React.FormEvent) => {

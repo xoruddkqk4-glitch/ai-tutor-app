@@ -2828,7 +2828,7 @@ export default function TeacherAdminPage() {
                                     onChange={e => setApiKey(e.target.value)}
                                 />
                                 <div className="teacher-alert-info">
-                                    🔒 API 키는 암호화되어 저장되며, 본인만 접근 가능합니다.
+                                    🔒 API 키는 교사 본인 계정에 안전하게 저장되며, 서버 프록시(Edge Function) 모드 사용 시 학생 브라우저로 노출되지 않습니다.
                                 </div>
                             </div>
                         </div>
