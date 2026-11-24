@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
     LayoutDashboard, Users, BookOpen, Settings, Plus, Save,
-    Trash2, Upload, FileText, CheckCircle, Play, Pause, LogOut, Edit,
+    Trash2, FileText, LogOut, Edit,
     Search, Tag, X, RotateCcw
 } from 'lucide-react';
 import type { Question, Room, LogicFlowStep } from '../types';
@@ -13,6 +13,11 @@ import { getRooms, deleteRoom, toggleRoomStatus } from '../lib/rooms';
 
 import { getTeacherSettings, updateTeacherSettings, getAppConfig, updateAppConfig, getAllTeachers, toggleTeacherActive, updateTeacherMaxQuestions, deleteTeacher, type TeacherRecord } from '../lib/settings';
 import { safeParseLogicFlow, normalizeFlowStepsForSave, findIncompleteFlowStepIndices, isTextbookQuestion } from '../lib/logic-flow';
+import {
+    DEFAULT_LOGIN_NOTICE_TEXT,
+    DEFAULT_REGULAR_QUESTION_LIMIT,
+    DEFAULT_TEACHER_SYSTEM_PROMPT,
+} from '../lib/constants';
 import {
     PRIMARY_QUESTION_TAGS,
     SECONDARY_QUESTION_TAGS,
@@ -32,6 +37,12 @@ import {
     saveCustomTagsToStorage,
 } from '../lib/question-meta';
 import { getErrorMessage } from '../lib/errors';
+import WelcomeTab from '../components/teacher/WelcomeTab';
+import RoomsTab from '../components/teacher/RoomsTab';
+import StudentsTab from '../components/teacher/StudentsTab';
+import SettingsTab from '../components/teacher/SettingsTab';
+import PresetOrCustomField from '../components/teacher/PresetOrCustomField';
+import TagChipGroup from '../components/teacher/TagChipGroup';
 
 type TeacherRole = 'master' | 'regular';
 
@@ -90,7 +101,7 @@ export default function TeacherAdminPage() {
     const [customGradeMode, setCustomGradeMode] = useState(false);
     const [customMonthMode, setCustomMonthMode] = useState(false);
     const [customTagInput, setCustomTagInput] = useState('');
-    const [customTagTick, setCustomTagTick] = useState(0);
+    const [storedCustomTags, setStoredCustomTags] = useState<string[]>([]);
 
     // Materials Search & Filter States
     const [filterYear, setFilterYear] = useState('');
@@ -104,19 +115,17 @@ export default function TeacherAdminPage() {
     const [filterTagMode, setFilterTagMode] = useState<'and' | 'or'>('and');
 
     const formCardRef = useRef<HTMLDivElement>(null);
+    const sessionEpochRef = useRef(0);
 
     // Settings
     const [apiKey, setApiKey] = useState('');
-    const [systemPrompt, setSystemPrompt] = useState('너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.');
+    const [systemPrompt, setSystemPrompt] = useState(DEFAULT_TEACHER_SYSTEM_PROMPT);
     const [driveFolderId, setDriveFolderId] = useState('');
     const [googleScriptUrl, setGoogleScriptUrl] = useState('');
-    const [maxQuestionsLimit, setMaxQuestionsLimit] = useState(50);
+    const [maxQuestionsLimit, setMaxQuestionsLimit] = useState(DEFAULT_REGULAR_QUESTION_LIMIT);
     const [individualMaxQuestions, setIndividualMaxQuestions] = useState<number | null>(null);
-    const [limitInput, setLimitInput] = useState('50');
-    const [loginNoticeText, setLoginNoticeText] = useState(`회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.
-서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.
-서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.
-기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`);
+    const [limitInput, setLimitInput] = useState(String(DEFAULT_REGULAR_QUESTION_LIMIT));
+    const [loginNoticeText, setLoginNoticeText] = useState(DEFAULT_LOGIN_NOTICE_TEXT);
     const maxQuestionsForRegular = individualMaxQuestions ?? maxQuestionsLimit;
 
     // Room Creation: Now handled via new window (RoomEditWindow)
@@ -138,13 +147,15 @@ export default function TeacherAdminPage() {
 
     // 로그인 페이지용 문항 제한수 및 안내문구 조회 (항상 최신 데이터를 가져오도록 함수화)
     const loadLoginConfig = async () => {
-        console.log('[loadLoginConfig] Fetching fresh config for login page...');
+        if (import.meta.env.DEV) {
+            console.log('[loadLoginConfig] Fetching fresh config for login page...');
+        }
         try {
             const limit = await getAppConfig('limit_regular_questions');
             if (limit && /^\d+$/.test(limit.trim())) {
                 setLoginQuestionLimit(Number(limit.trim()));
             } else {
-                setLoginQuestionLimit(50); // 기본값 설정
+                setLoginQuestionLimit(DEFAULT_REGULAR_QUESTION_LIMIT);
             }
 
             const notice = await getAppConfig('login_notice_text');
@@ -152,9 +163,8 @@ export default function TeacherAdminPage() {
                 setLoginNotice(notice);
                 setLoginNoticeText(notice); // 에디터용 데이터도 동기화
             } else {
-                const defaultNotice = `회원가입 후 별도의 승인 절차 없이 바로 서비스를 이용하실 수 있습니다.\n서버 관리 문제로 교사 1인당 최대 {limit}문항까지 업로드하실 수 있습니다.\n서비스가 아직은 불안정하여, 예기치 않게 이용이 제한될 수 있는 점 양해 부탁드립니다.\n기타 문의사항은 ghinokr@gmail.com으로 이메일을 보내주시면 안내해 드리겠습니다.`;
-                setLoginNotice(defaultNotice);
-                setLoginNoticeText(defaultNotice);
+                setLoginNotice(DEFAULT_LOGIN_NOTICE_TEXT);
+                setLoginNoticeText(DEFAULT_LOGIN_NOTICE_TEXT);
             }
         } catch (error) {
             console.error('[loadLoginConfig] Error fetching config:', error);
@@ -162,50 +172,56 @@ export default function TeacherAdminPage() {
     };
 
     // 문항 로드
-    const loadQuestions = async () => {
+    const loadQuestions = async (epoch = sessionEpochRef.current) => {
         try {
             const data = await getQuestions();
+            if (epoch !== sessionEpochRef.current) return;
             setQuestions(data);
         } catch (error: unknown) {
+            if (epoch !== sessionEpochRef.current) return;
             console.error('문항 로드 실패:', error);
             alert('문항을 불러오는데 실패했습니다: ' + getErrorMessage(error));
         }
     };
 
     // 수업 방 로드
-    const loadRooms = async () => {
+    const loadRooms = async (epoch = sessionEpochRef.current) => {
         try {
             const data = await getRooms();
+            if (epoch !== sessionEpochRef.current) return;
             setRooms(data);
         } catch (error: unknown) {
+            if (epoch !== sessionEpochRef.current) return;
             console.error('수업 방 로드 실패:', error);
-            // alert('수업 방을 불러오는데 실패했습니다: ' + getErrorMessage(error));
         }
     };
 
     // 학생 로드
-    const loadStudents = async () => {
+    const loadStudents = async (epoch = sessionEpochRef.current) => {
         try {
             const data = await getStudents();
+            if (epoch !== sessionEpochRef.current) return;
             setSavedStudents(data);
             setSelectedStudentsForDeletion(prev => prev.filter(id => data.some(s => s.id === id)));
         } catch (error: unknown) {
+            if (epoch !== sessionEpochRef.current) return;
             console.error('학생 로드 실패:', error);
             alert('학생을 불러오는데 실패했습니다: ' + getErrorMessage(error));
         }
     };
 
     // 설정 로드
-    const loadSettings = async (userId: string) => {
+    const loadSettings = async (userId: string, epoch = sessionEpochRef.current) => {
         try {
             const data = await getTeacherSettings(userId);
-            // Always set state to overwite potential stale data
+            if (epoch !== sessionEpochRef.current) return;
             setApiKey(data.openai_api_key || '');
-            setSystemPrompt(data.system_prompt || '너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.');
+            setSystemPrompt(data.system_prompt || DEFAULT_TEACHER_SYSTEM_PROMPT);
             setDriveFolderId(data.drive_folder_id || '');
             setGoogleScriptUrl(data.google_script_url || '');
             setIndividualMaxQuestions(data.max_questions ?? null);
         } catch (error) {
+            if (epoch !== sessionEpochRef.current) return;
             console.error('설정 로드 실패:', error);
         }
     };
@@ -227,12 +243,14 @@ export default function TeacherAdminPage() {
     };
 
     // 교사 목록 로드 (Master Only)
-    const loadTeacherList = async () => {
+    const loadTeacherList = async (epoch = sessionEpochRef.current) => {
         try {
             const data = await getAllTeachers();
+            if (epoch !== sessionEpochRef.current) return;
             setTeacherList(data);
             setTeacherLimitDrafts({});
         } catch (error: unknown) {
+            if (epoch !== sessionEpochRef.current) return;
             console.error('교사 목록 로드 실패:', error);
         }
     };
@@ -251,37 +269,45 @@ export default function TeacherAdminPage() {
 
     // 세션 복원 (자동 로그인)
     useEffect(() => {
+        let cancelled = false;
+        const startEpoch = sessionEpochRef.current;
         getCurrentUser().then(user => {
+            if (cancelled || startEpoch !== sessionEpochRef.current) return;
             if (user) {
+                const nextEpoch = ++sessionEpochRef.current;
                 setTeacherId(user.id);
                 setTeacherEmail(user.email);
                 setTeacherRole(user.role);
+                setStoredCustomTags(loadSavedCustomTags(user.id));
                 setIsLogin(true);
-                // After session restore, always go to welcome
                 setActiveTab('welcome');
-                loadQuestions();
-                loadStudents();
-                loadRooms();
-                loadSettings(user.id);
+                loadQuestions(nextEpoch);
+                loadStudents(nextEpoch);
+                loadRooms(nextEpoch);
+                loadSettings(user.id, nextEpoch);
                 loadAppConfig();
-            } else {
+            } else if (import.meta.env.DEV) {
                 console.log('[SessionRestore] No user found');
             }
         }).catch(err => {
             console.error('세션 복원 실패:', err);
         });
+        return () => {
+            cancelled = true;
+        };
     }, []);
 
     // 탭 전환 시 설정 정보 최신화
     useEffect(() => {
         if (activeTab === 'settings' && isLogin && teacherId) {
             let cancelled = false;
+            const epoch = sessionEpochRef.current;
             void Promise.resolve().then(() => {
-                if (cancelled) return;
-                void loadSettings(teacherId);
+                if (cancelled || epoch !== sessionEpochRef.current) return;
+                void loadSettings(teacherId, epoch);
                 void loadAppConfig();
                 if (teacherRole === 'master') {
-                    void loadTeacherList();
+                    void loadTeacherList(epoch);
                 }
             });
             return () => {
@@ -295,16 +321,17 @@ export default function TeacherAdminPage() {
 
         try {
             const user = await signIn(loginEmail, loginPassword);
+            const nextEpoch = ++sessionEpochRef.current;
             setTeacherId(user.id);
             setTeacherEmail(user.email);
             setTeacherRole(user.role);
+            setStoredCustomTags(loadSavedCustomTags(user.id));
             setIsLogin(true);
-            setActiveTab('welcome'); // Login defaults to welcome
-            // 로그인 후 문항, 학생, 수업 방 및 설정 로드
-            loadQuestions();
-            loadStudents();
-            loadRooms();
-            loadSettings(user.id);
+            setActiveTab('welcome');
+            loadQuestions(nextEpoch);
+            loadStudents(nextEpoch);
+            loadRooms(nextEpoch);
+            loadSettings(user.id, nextEpoch);
             loadAppConfig();
         } catch (error: unknown) {
             alert('로그인 실패: ' + getErrorMessage(error, '이메일 또는 비밀번호를 확인하세요'));
@@ -316,12 +343,17 @@ export default function TeacherAdminPage() {
 
         try {
             const user = await signUp(loginEmail, loginPassword);
+            const nextEpoch = ++sessionEpochRef.current;
             setTeacherId(user.id);
             setTeacherEmail(user.email);
             setTeacherRole(user.role);
+            setStoredCustomTags(loadSavedCustomTags(user.id));
             setIsLogin(true);
-            setActiveTab('welcome'); // Signup defaults to welcome
-            loadSettings(user.id);
+            setActiveTab('welcome');
+            loadQuestions(nextEpoch);
+            loadStudents(nextEpoch);
+            loadRooms(nextEpoch);
+            loadSettings(user.id, nextEpoch);
             loadAppConfig();
             alert('회원가입 성공! 일반 교사로 등록되었습니다.');
         } catch (error: unknown) {
@@ -330,11 +362,6 @@ export default function TeacherAdminPage() {
     };
 
     const yearPresets = useMemo(() => getYearPresets(), []);
-
-    const storedCustomTags = useMemo(() => {
-        void customTagTick;
-        return loadSavedCustomTags(teacherId);
-    }, [teacherId, customTagTick]);
 
     const customTagPool = useMemo(() => {
         const merged: string[] = [...storedCustomTags];
@@ -421,14 +448,18 @@ export default function TeacherAdminPage() {
         };
     }, [questionEntries, yearPresets, storedCustomTags, filterTags]);
 
+    const effectiveFilterYear = filterYear && availableFilterYears.includes(filterYear) ? filterYear : '';
+    const effectiveFilterGrade = filterGrade && availableFilterGrades.includes(filterGrade) ? filterGrade : '';
+    const effectiveFilterMonth = filterMonth && availableFilterMonths.includes(filterMonth) ? filterMonth : '';
+
     const filteredEntries = useMemo(() => {
         const kw = filterKeyword.trim().toLowerCase();
         return questionEntries.filter(({ q, source, tags, isTextbook }) => {
             if (filterPassageType === 'csat' && isTextbook) return false;
             if (filterPassageType === 'textbook' && !isTextbook) return false;
-            if (filterYear && source.sourceYear !== filterYear) return false;
-            if (filterGrade && source.sourceGrade !== filterGrade) return false;
-            if (filterMonth && source.sourceMonth !== filterMonth) return false;
+            if (effectiveFilterYear && source.sourceYear !== effectiveFilterYear) return false;
+            if (effectiveFilterGrade && source.sourceGrade !== effectiveFilterGrade) return false;
+            if (effectiveFilterMonth && source.sourceMonth !== effectiveFilterMonth) return false;
             if (filterSourceNumber.trim() && !matchesQuestionNumberFilter(source.sourceNumber, filterSourceNumber)) {
                 return false;
             }
@@ -463,9 +494,9 @@ export default function TeacherAdminPage() {
     }, [
         questionEntries,
         filterPassageType,
-        filterYear,
-        filterGrade,
-        filterMonth,
+        effectiveFilterYear,
+        effectiveFilterGrade,
+        effectiveFilterMonth,
         filterSourceNumber,
         filterExamCode,
         filterTags,
@@ -474,9 +505,9 @@ export default function TeacherAdminPage() {
     ]);
 
     const hasActiveQuestionFilter = Boolean(
-        filterYear ||
-        filterGrade ||
-        filterMonth ||
+        effectiveFilterYear ||
+        effectiveFilterGrade ||
+        effectiveFilterMonth ||
         filterSourceNumber.trim() ||
         filterExamCode.trim() ||
         filterKeyword.trim() ||
@@ -524,8 +555,11 @@ export default function TeacherAdminPage() {
 
         const newCustom = parsed.filter(t => getTagCategory(t) === 'custom');
         if (newCustom.length > 0) {
-            saveCustomTagsToStorage(teacherId, [...storedCustomTags, ...newCustom]);
-            setCustomTagTick(t => t + 1);
+            const nextStored = normalizeTags([...storedCustomTags, ...newCustom]).filter(
+                t => getTagCategory(t) === 'custom'
+            );
+            saveCustomTagsToStorage(teacherId, nextStored);
+            setStoredCustomTags(nextStored);
         }
         setCustomTagInput('');
     };
@@ -533,7 +567,7 @@ export default function TeacherAdminPage() {
     const handleRemoveCustomTag = (tag: string) => {
         const nextStored = storedCustomTags.filter(t => t !== tag);
         saveCustomTagsToStorage(teacherId, nextStored);
-        setCustomTagTick(t => t + 1);
+        setStoredCustomTags(nextStored);
         setNewQuestion(prev => ({
             ...prev,
             tags: normalizeTags(prev.tags).filter(t => t !== tag),
@@ -549,15 +583,17 @@ export default function TeacherAdminPage() {
     const handleLogout = async () => {
         try {
             await signOut();
+            sessionEpochRef.current += 1;
             setIsLogin(false);
             setTeacherId('');
             setTeacherEmail('');
             setTeacherRole('regular');
+            setStoredCustomTags([]);
             setActiveTab('welcome');
 
             // Clear all sensitive states
             setApiKey('');
-            setSystemPrompt('너는 친절하고 꼼꼼한 고등학교 선생님이야. 학생의 수준에 맞춰 설명해줘.');
+            setSystemPrompt(DEFAULT_TEACHER_SYSTEM_PROMPT);
             setDriveFolderId('');
             setGoogleScriptUrl('');
             setIndividualMaxQuestions(null);
@@ -570,6 +606,7 @@ export default function TeacherAdminPage() {
             setSelectedStudentsForDeletion([]);
             setBulkStudentText('');
             setTeacherList([]);
+            setTeacherLimitDrafts({});
 
             // Clear editing & filter states
             resetQuestionForm();
@@ -577,8 +614,8 @@ export default function TeacherAdminPage() {
             setFilterTagMode('and');
 
             // Reset Limits
-            setMaxQuestionsLimit(50);
-            setLimitInput('50');
+            setMaxQuestionsLimit(DEFAULT_REGULAR_QUESTION_LIMIT);
+            setLimitInput(String(DEFAULT_REGULAR_QUESTION_LIMIT));
 
         } catch (error: unknown) {
             alert('로그아웃 실패: ' + getErrorMessage(error));
@@ -686,30 +723,26 @@ export default function TeacherAdminPage() {
         return questions.length < maxQuestionsForRegular;
     };
 
-    const handleAddQuestion = async () => {
-        if (!canAddQuestion()) {
-            alert(`일반 교사는 최대 ${maxQuestionsForRegular}개까지만 문항을 등록할 수 있습니다.`);
-            return;
-        }
-
+    const buildQuestionPayload = (): Omit<Question, 'id'> | null => {
         const examCode = (newQuestion.examCode || '').trim();
-        if (!examCode || !newQuestion.passage?.trim()) {
+        const passage = newQuestion.passage;
+        if (!examCode || !passage?.trim()) {
             alert('문항 번호와 본문은 필수입니다.');
-            return;
+            return null;
         }
 
         if (passageType === 'csat') {
             const incompleteRows = findIncompleteFlowStepIndices(flowSteps);
             if (incompleteRows.length > 0) {
                 alert(`논리 흐름 ${incompleteRows.join(', ')}행에 큰 범주 또는 중심 의미가 비어 있습니다. 저장 시 누락되지 않도록 모두 채우거나 빈 행을 삭제해 주세요.`);
-                return;
+                return null;
             }
         }
 
         const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
         if (passageType === 'csat' && logicFlowSaved.length === 0) {
             alert('수능형 지문: 논리 흐름 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
-            return;
+            return null;
         }
 
         const sourceYear = normalizeYear(newQuestion.sourceYear);
@@ -719,23 +752,33 @@ export default function TeacherAdminPage() {
         const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth, sourceNumber });
         const tags = normalizeTags(newQuestion.tags);
 
-        try {
-            const q: Omit<Question, 'id'> = {
-                examCode,
-                targetGrade,
-                sourceYear,
-                sourceGrade,
-                sourceMonth,
-                sourceNumber,
-                tags,
-                topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
-                logicFlow: logicFlowSaved,
-                passage: newQuestion.passage,
-                passageType: passageType,
-            };
+        return {
+            examCode,
+            targetGrade,
+            sourceYear,
+            sourceGrade,
+            sourceMonth,
+            sourceNumber,
+            tags,
+            topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
+            logicFlow: logicFlowSaved,
+            passage,
+            passageType,
+        };
+    };
 
-            await createQuestion(q);
-            await loadQuestions(); // 문항 목록 새로고침
+    const handleAddQuestion = async () => {
+        if (!canAddQuestion()) {
+            alert(`일반 교사는 최대 ${maxQuestionsForRegular}개까지만 문항을 등록할 수 있습니다.`);
+            return;
+        }
+
+        const payload = buildQuestionPayload();
+        if (!payload) return;
+
+        try {
+            await createQuestion(payload);
+            await loadQuestions();
             resetQuestionForm();
             alert('문항이 추가되었습니다.');
         } catch (error: unknown) {
@@ -746,49 +789,11 @@ export default function TeacherAdminPage() {
     const handleUpdateQuestion = async () => {
         if (!editingQuestion) return;
 
-        const examCode = (newQuestion.examCode || '').trim();
-        if (!examCode || !newQuestion.passage?.trim()) {
-            alert('문항 번호와 본문은 필수입니다.');
-            return;
-        }
-
-        if (passageType === 'csat') {
-            const incompleteRows = findIncompleteFlowStepIndices(flowSteps);
-            if (incompleteRows.length > 0) {
-                alert(`논리 흐름 ${incompleteRows.join(', ')}행에 큰 범주 또는 중심 의미가 비어 있습니다. 저장 시 누락되지 않도록 모두 채우거나 빈 행을 삭제해 주세요.`);
-                return;
-            }
-        }
-
-        const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
-        if (passageType === 'csat' && logicFlowSaved.length === 0) {
-            alert('수능형 지문: 논리 흐름 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
-            return;
-        }
-
-        const sourceYear = normalizeYear(newQuestion.sourceYear);
-        const sourceGrade = normalizeGrade(newQuestion.sourceGrade);
-        const sourceMonth = normalizeMonth(newQuestion.sourceMonth);
-        const sourceNumber = normalizeSourceNumber(newQuestion.sourceNumber);
-        const targetGrade = formatSourceSummary({ sourceYear, sourceGrade, sourceMonth, sourceNumber });
-        const tags = normalizeTags(newQuestion.tags);
+        const payload = buildQuestionPayload();
+        if (!payload) return;
 
         try {
-            const updates: Partial<Omit<Question, 'id'>> = {
-                examCode,
-                targetGrade,
-                sourceYear,
-                sourceGrade,
-                sourceMonth,
-                sourceNumber,
-                tags,
-                topic: passageType === 'textbook' ? '' : (newQuestion.topic || ''),
-                logicFlow: logicFlowSaved,
-                passage: newQuestion.passage,
-                passageType: passageType,
-            };
-
-            await updateQuestion(editingQuestion.id, updates);
+            await updateQuestion(editingQuestion.id, payload);
             await loadQuestions();
             resetQuestionForm();
             alert('문항이 수정되었습니다.');
@@ -809,132 +814,7 @@ export default function TeacherAdminPage() {
         }
     };
 
-    const renderWelcome = () => (
-        <div className="teacher-content-wrapper" style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: '80vh',
-            textAlign: 'center',
-            padding: '40px',
-            background: 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 100%)',
-            borderRadius: '24px',
-            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.05)'
-        }}>
-            <div style={{
-                width: '100px',
-                height: '100px',
-                background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
-                borderRadius: '28px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginBottom: '32px',
-                boxShadow: '0 20px 25px -5px rgba(59, 130, 246, 0.3)',
-                transform: 'rotate(-5deg)'
-            }}>
-                <BookOpen size={48} color="white" />
-            </div>
-            <h1 style={{
-                fontSize: '42px',
-                fontWeight: '850',
-                color: '#1e293b',
-                marginBottom: '20px',
-                letterSpacing: '-0.025em',
-                lineHeight: '1.2'
-            }}>
-                Welcome Back,<br />
-                <span style={{ color: '#3b82f6' }}>AI Tutor</span>
-            </h1>
-            <p style={{
-                fontSize: '19px',
-                color: '#475569',
-                maxWidth: '650px',
-                lineHeight: '1.7',
-                marginBottom: '48px',
-                fontWeight: '400'
-            }}>
-                선생님을 위한 지능형 학습 보조 솔루션, AI Tutor 교사 페이지입니다.<br />
-                왼쪽 메뉴를 통해 학습 자료를 관리하고 실시간 대시보드를 확인하세요.
-            </p>
-            <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                gap: '24px',
-                width: '100%',
-                maxWidth: '850px'
-            }}>
-                <div
-                    className="welcome-card"
-                    style={{
-                        padding: '32px 24px',
-                        background: 'white',
-                        borderRadius: '20px',
-                        border: '1px solid #e2e8f0',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-                    }}
-                    onClick={() => setActiveTab('students')}
-                >
-                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#fef2f2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                        <Users size={24} color="#ef4444" />
-                    </div>
-                    <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>학생 명단 관리</h3>
-                    <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>클래스별 학생 명단을 등록하고 개인별 학습 역량을 설정 및 관리합니다.</p>
-                </div>
-                <div
-                    className="welcome-card"
-                    style={{
-                        padding: '32px 24px',
-                        background: 'white',
-                        borderRadius: '20px',
-                        border: '1px solid #e2e8f0',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-                    }}
-                    onClick={() => setActiveTab('materials')}
-                >
-                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                        <FileText size={24} color="#3b82f6" />
-                    </div>
-                    <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>학습 자료 관리</h3>
-                    <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>지문 등록 및 논리 흐름 설정을 통해 AI 튜터의 지식 베이스를 구축합니다.</p>
-                </div>
-                <div
-                    className="welcome-card"
-                    style={{
-                        padding: '32px 24px',
-                        background: 'white',
-                        borderRadius: '20px',
-                        border: '1px solid #e2e8f0',
-                        textAlign: 'center',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)'
-                    }}
-                    onClick={() => setActiveTab('dashboard')}
-                >
-                    <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-                        <LayoutDashboard size={24} color="#10b981" />
-                    </div>
-                    <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', marginBottom: '10px' }}>수업 대시보드</h3>
-                    <p style={{ fontSize: '14px', color: '#64748b', lineHeight: '1.5' }}>수업 방을 생성하고 참여 학생들의 학습 현황을 실시간으로 모니터링합니다.</p>
-                </div>
-            </div>
-            <style>{`
-                .welcome-card:hover {
-                    transform: translateY(-8px);
-                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-                    border-color: #3b82f6;
-                }
-            `}</style>
-        </div>
-    );
+
 
     const handleCreateRoom = () => {
         const width = 600;
@@ -1440,86 +1320,17 @@ export default function TeacherAdminPage() {
             <main className="teacher-main">
 
                 {/* --- TAB: Welcome --- */}
-                {activeTab === 'welcome' && renderWelcome()}
+                {activeTab === 'welcome' && <WelcomeTab onSelectTab={setActiveTab} />}
 
                 {/* --- TAB: Dashboard (Rooms) --- */}
                 {activeTab === 'dashboard' && (
-                    <div className="teacher-content-wrapper">
-                        <div className="teacher-section-header">
-                            <h1 className="teacher-section-title">수업 대시보드</h1>
-                            <p className="teacher-section-subtitle">현재 진행 중인 수업 방을 관리하세요.</p>
-                        </div>
-
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '20px' }}>
-                            <button onClick={handleCreateRoom} className="teacher-button-primary">
-                                <Plus size={20} /> 새 수업 시작 (방 만들기)
-                            </button>
-                        </div>
-
-                        {/* Room List */}
-                        {rooms.length === 0 ? (
-                            <div className="teacher-empty-state">
-                                <Play className="teacher-empty-state-icon" />
-                                <div className="teacher-empty-state-title">진행 중인 수업이 없습니다.</div>
-                                <div className="teacher-empty-state-subtitle">새 수업 시작 버튼을 눌러 Room Code를 생성하세요.</div>
-                            </div>
-                        ) : (
-                            rooms.map((room) => (
-                                <div key={room.id} className="teacher-room-card">
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                                        <div
-                                            className="teacher-room-code"
-                                            style={{
-                                                background: room.isActive ? undefined : '#f1f5f9',
-                                                color: room.isActive ? undefined : '#64748b'
-                                            }}
-                                        >
-                                            {room.code}
-                                        </div>
-                                        <div>
-                                            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#222', marginBottom: '4px' }}>
-                                                {room.className}
-                                            </div>
-                                            <div style={{ fontSize: '13px', color: '#666', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                <span style={{
-                                                    width: '8px',
-                                                    height: '8px',
-                                                    background: room.isActive ? '#10b981' : '#f59e0b',
-                                                    borderRadius: '50%'
-                                                }}></span>
-                                                {room.isActive ? '수업 진행 중' : '일시 중지됨'} • {room.createdAt ? new Date(room.createdAt).toLocaleString('ko-KR') : '-'}
-                                                {room.folderName && <span style={{ marginLeft: '8px', color: '#888' }}>({room.folderName})</span>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
-                                        <button
-                                            onClick={() => handleToggleRoomActive(room)}
-                                            className="teacher-button-secondary"
-                                            style={{ padding: '8px 12px', fontSize: '12px' }}
-                                            title={room.isActive ? '일시 중지' : '수업 재개'}
-                                        >
-                                            {room.isActive ? <><Pause size={15} /> 일시중지</> : <><Play size={15} /> 재개</>}
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditRoom(room)}
-                                            className="teacher-button-secondary"
-                                            title="수정"
-                                        >
-                                            <Edit size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteRoom(room.id)}
-                                            className="teacher-button-danger"
-                                            title="종료(삭제)"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
+                    <RoomsTab
+                        rooms={rooms}
+                        onCreateRoom={handleCreateRoom}
+                        onToggleRoomActive={handleToggleRoomActive}
+                        onEditRoom={handleEditRoom}
+                        onDeleteRoom={handleDeleteRoom}
+                    />
                 )}
 
                 {/* --- TAB: Materials (Questions) --- */}
@@ -1611,140 +1422,42 @@ export default function TeacherAdminPage() {
                             <div className="teacher-input-group">
                                 <label className="teacher-input-label">출처 (년도 · 학년 · 월 · 문항 번호)</label>
                                 <div className="teacher-source-grid">
-                                    <div className="teacher-source-field">
-                                        <span className="teacher-source-sublabel">년도</span>
-                                        {customYearMode ? (
-                                            <div className="teacher-custom-input-wrap">
-                                                <input
-                                                    type="text"
-                                                    className="teacher-input-field"
-                                                    placeholder="예: 2025"
-                                                    value={newQuestion.sourceYear || ''}
-                                                    onChange={e => setNewQuestion({ ...newQuestion, sourceYear: e.target.value })}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="teacher-inline-switch-btn"
-                                                    onClick={() => {
-                                                        setCustomYearMode(false);
-                                                        if (newQuestion.sourceYear && !yearPresets.includes(normalizeYear(newQuestion.sourceYear))) {
-                                                            setNewQuestion({ ...newQuestion, sourceYear: '' });
-                                                        }
-                                                    }}
-                                                >
-                                                    목록
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <select
-                                                className="teacher-select"
-                                                value={newQuestion.sourceYear || ''}
-                                                onChange={e => {
-                                                    if (e.target.value === '__custom__') {
-                                                        setCustomYearMode(true);
-                                                    } else {
-                                                        setNewQuestion({ ...newQuestion, sourceYear: e.target.value });
-                                                    }
-                                                }}
-                                            >
-                                                <option value="">년도 선택</option>
-                                                {yearPresets.map(y => (
-                                                    <option key={y} value={y}>{y}년</option>
-                                                ))}
-                                                <option value="__custom__">직접 입력...</option>
-                                            </select>
-                                        )}
-                                    </div>
+                                    <PresetOrCustomField
+                                        label="년도"
+                                        value={newQuestion.sourceYear || ''}
+                                        presets={yearPresets}
+                                        customMode={customYearMode}
+                                        placeholder="예: 2025"
+                                        selectEmptyLabel="년도 선택"
+                                        formatPresetLabel={(y) => `${y}년`}
+                                        normalizeValue={normalizeYear}
+                                        onChangeValue={(val) => setNewQuestion({ ...newQuestion, sourceYear: val })}
+                                        onToggleCustomMode={setCustomYearMode}
+                                    />
 
-                                    <div className="teacher-source-field">
-                                        <span className="teacher-source-sublabel">학년</span>
-                                        {customGradeMode ? (
-                                            <div className="teacher-custom-input-wrap">
-                                                <input
-                                                    type="text"
-                                                    className="teacher-input-field"
-                                                    placeholder="예: 고2, 중3"
-                                                    value={newQuestion.sourceGrade || ''}
-                                                    onChange={e => setNewQuestion({ ...newQuestion, sourceGrade: e.target.value })}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="teacher-inline-switch-btn"
-                                                    onClick={() => {
-                                                        setCustomGradeMode(false);
-                                                        if (newQuestion.sourceGrade && !(GRADE_PRESETS as readonly string[]).includes(normalizeGrade(newQuestion.sourceGrade))) {
-                                                            setNewQuestion({ ...newQuestion, sourceGrade: '' });
-                                                        }
-                                                    }}
-                                                >
-                                                    목록
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <select
-                                                className="teacher-select"
-                                                value={newQuestion.sourceGrade || ''}
-                                                onChange={e => {
-                                                    if (e.target.value === '__custom__') {
-                                                        setCustomGradeMode(true);
-                                                    } else {
-                                                        setNewQuestion({ ...newQuestion, sourceGrade: e.target.value });
-                                                    }
-                                                }}
-                                            >
-                                                <option value="">학년 선택</option>
-                                                {GRADE_PRESETS.map(g => (
-                                                    <option key={g} value={g}>{g}</option>
-                                                ))}
-                                                <option value="__custom__">직접 입력...</option>
-                                            </select>
-                                        )}
-                                    </div>
+                                    <PresetOrCustomField
+                                        label="학년"
+                                        value={newQuestion.sourceGrade || ''}
+                                        presets={GRADE_PRESETS}
+                                        customMode={customGradeMode}
+                                        placeholder="예: 고2, 중3"
+                                        selectEmptyLabel="학년 선택"
+                                        normalizeValue={normalizeGrade}
+                                        onChangeValue={(val) => setNewQuestion({ ...newQuestion, sourceGrade: val })}
+                                        onToggleCustomMode={setCustomGradeMode}
+                                    />
 
-                                    <div className="teacher-source-field">
-                                        <span className="teacher-source-sublabel">월/시기</span>
-                                        {customMonthMode ? (
-                                            <div className="teacher-custom-input-wrap">
-                                                <input
-                                                    type="text"
-                                                    className="teacher-input-field"
-                                                    placeholder="예: 9월, 수능, 교과서 2과"
-                                                    value={newQuestion.sourceMonth || ''}
-                                                    onChange={e => setNewQuestion({ ...newQuestion, sourceMonth: e.target.value })}
-                                                />
-                                                <button
-                                                    type="button"
-                                                    className="teacher-inline-switch-btn"
-                                                    onClick={() => {
-                                                        setCustomMonthMode(false);
-                                                        if (newQuestion.sourceMonth && !(MONTH_PRESETS as readonly string[]).includes(normalizeMonth(newQuestion.sourceMonth))) {
-                                                            setNewQuestion({ ...newQuestion, sourceMonth: '' });
-                                                        }
-                                                    }}
-                                                >
-                                                    목록
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <select
-                                                className="teacher-select"
-                                                value={newQuestion.sourceMonth || ''}
-                                                onChange={e => {
-                                                    if (e.target.value === '__custom__') {
-                                                        setCustomMonthMode(true);
-                                                    } else {
-                                                        setNewQuestion({ ...newQuestion, sourceMonth: e.target.value });
-                                                    }
-                                                }}
-                                            >
-                                                <option value="">월/시기 선택</option>
-                                                {MONTH_PRESETS.map(m => (
-                                                    <option key={m} value={m}>{m}</option>
-                                                ))}
-                                                <option value="__custom__">직접 입력...</option>
-                                            </select>
-                                        )}
-                                    </div>
+                                    <PresetOrCustomField
+                                        label="월/시기"
+                                        value={newQuestion.sourceMonth || ''}
+                                        presets={MONTH_PRESETS}
+                                        customMode={customMonthMode}
+                                        placeholder="예: 9월, 수능, 교과서 2과"
+                                        selectEmptyLabel="월/시기 선택"
+                                        normalizeValue={normalizeMonth}
+                                        onChangeValue={(val) => setNewQuestion({ ...newQuestion, sourceMonth: val })}
+                                        onToggleCustomMode={setCustomMonthMode}
+                                    />
 
                                     <div className="teacher-source-field">
                                         <span className="teacher-source-sublabel">문항 번호</span>
@@ -1769,43 +1482,21 @@ export default function TeacherAdminPage() {
                                     )}
                                 </label>
                                 <div className="teacher-tag-section">
-                                    <div className="teacher-tag-group-row">
-                                        <span className="teacher-tag-group-label">기본 구분</span>
-                                        <div className="teacher-tag-chip-list">
-                                            {PRIMARY_QUESTION_TAGS.map(tag => {
-                                                const active = normalizeTags(newQuestion.tags).includes(tag);
-                                                return (
-                                                    <button
-                                                        key={tag}
-                                                        type="button"
-                                                        onClick={() => handleToggleFormTag(tag)}
-                                                        className={`teacher-tag-chip primary ${active ? 'active' : ''}`}
-                                                    >
-                                                        #{tag}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+                                    <TagChipGroup
+                                        label="기본 구분"
+                                        tags={PRIMARY_QUESTION_TAGS}
+                                        category="primary"
+                                        activeTags={normalizeTags(newQuestion.tags)}
+                                        onToggle={handleToggleFormTag}
+                                    />
 
-                                    <div className="teacher-tag-group-row">
-                                        <span className="teacher-tag-group-label">추가 태그</span>
-                                        <div className="teacher-tag-chip-list">
-                                            {SECONDARY_QUESTION_TAGS.map(tag => {
-                                                const active = normalizeTags(newQuestion.tags).includes(tag);
-                                                return (
-                                                    <button
-                                                        key={tag}
-                                                        type="button"
-                                                        onClick={() => handleToggleFormTag(tag)}
-                                                        className={`teacher-tag-chip secondary ${active ? 'active' : ''}`}
-                                                    >
-                                                        #{tag}
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+                                    <TagChipGroup
+                                        label="추가 태그"
+                                        tags={SECONDARY_QUESTION_TAGS}
+                                        category="secondary"
+                                        activeTags={normalizeTags(newQuestion.tags)}
+                                        onToggle={handleToggleFormTag}
+                                    />
 
                                     <div className="teacher-tag-group-row">
                                         <span className="teacher-tag-group-label">직접 추가</span>
@@ -2122,7 +1813,7 @@ export default function TeacherAdminPage() {
                                             <span className="teacher-source-sublabel">출처 년도</span>
                                             <select
                                                 className="teacher-select"
-                                                value={filterYear}
+                                                value={effectiveFilterYear}
                                                 onChange={e => setFilterYear(e.target.value)}
                                             >
                                                 <option value="">전체 년도</option>
@@ -2138,7 +1829,7 @@ export default function TeacherAdminPage() {
                                             <span className="teacher-source-sublabel">출처 학년</span>
                                             <select
                                                 className="teacher-select"
-                                                value={filterGrade}
+                                                value={effectiveFilterGrade}
                                                 onChange={e => setFilterGrade(e.target.value)}
                                             >
                                                 <option value="">전체 학년</option>
@@ -2154,7 +1845,7 @@ export default function TeacherAdminPage() {
                                             <span className="teacher-source-sublabel">출처 월/시기</span>
                                             <select
                                                 className="teacher-select"
-                                                value={filterMonth}
+                                                value={effectiveFilterMonth}
                                                 onChange={e => setFilterMonth(e.target.value)}
                                             >
                                                 <option value="">전체 월/시기</option>
@@ -2226,66 +1917,33 @@ export default function TeacherAdminPage() {
                                         </div>
 
                                         <div className="teacher-search-tag-groups">
-                                            <div className="teacher-tag-group-row">
-                                                <span className="teacher-tag-group-label">기본 구분</span>
-                                                <div className="teacher-tag-chip-list">
-                                                    {PRIMARY_QUESTION_TAGS.map(tag => {
-                                                        const active = filterTags.includes(tag);
-                                                        const count = tagCounts.get(tag) ?? 0;
-                                                        return (
-                                                            <button
-                                                                key={tag}
-                                                                type="button"
-                                                                onClick={() => handleToggleFilterTag(tag)}
-                                                                className={`teacher-tag-chip primary ${active ? 'active' : ''}`}
-                                                            >
-                                                                #{tag} <span className="teacher-tag-count">{count}</span>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
+                                            <TagChipGroup
+                                                label="기본 구분"
+                                                tags={PRIMARY_QUESTION_TAGS}
+                                                category="primary"
+                                                activeTags={filterTags}
+                                                counts={tagCounts}
+                                                onToggle={handleToggleFilterTag}
+                                            />
 
-                                            <div className="teacher-tag-group-row">
-                                                <span className="teacher-tag-group-label">추가 태그</span>
-                                                <div className="teacher-tag-chip-list">
-                                                    {SECONDARY_QUESTION_TAGS.map(tag => {
-                                                        const active = filterTags.includes(tag);
-                                                        const count = tagCounts.get(tag) ?? 0;
-                                                        return (
-                                                            <button
-                                                                key={tag}
-                                                                type="button"
-                                                                onClick={() => handleToggleFilterTag(tag)}
-                                                                className={`teacher-tag-chip secondary ${active ? 'active' : ''}`}
-                                                            >
-                                                                #{tag} <span className="teacher-tag-count">{count}</span>
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            </div>
+                                            <TagChipGroup
+                                                label="추가 태그"
+                                                tags={SECONDARY_QUESTION_TAGS}
+                                                category="secondary"
+                                                activeTags={filterTags}
+                                                counts={tagCounts}
+                                                onToggle={handleToggleFilterTag}
+                                            />
 
                                             {filterCustomTags.length > 0 && (
-                                                <div className="teacher-tag-group-row">
-                                                    <span className="teacher-tag-group-label">직접 추가</span>
-                                                    <div className="teacher-tag-chip-list">
-                                                        {filterCustomTags.map(tag => {
-                                                            const active = filterTags.includes(tag);
-                                                            const count = tagCounts.get(tag) ?? 0;
-                                                            return (
-                                                                <button
-                                                                    key={tag}
-                                                                    type="button"
-                                                                    onClick={() => handleToggleFilterTag(tag)}
-                                                                    className={`teacher-tag-chip custom ${active ? 'active' : ''}`}
-                                                                >
-                                                                    #{tag} <span className="teacher-tag-count">{count}</span>
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
+                                                <TagChipGroup
+                                                    label="직접 추가"
+                                                    tags={filterCustomTags}
+                                                    category="custom"
+                                                    activeTags={filterTags}
+                                                    counts={tagCounts}
+                                                    onToggle={handleToggleFilterTag}
+                                                />
                                             )}
                                         </div>
                                     </div>
@@ -2447,461 +2105,54 @@ export default function TeacherAdminPage() {
 
                 {/* --- TAB: Students (Bulk Upload) --- */}
                 {activeTab === 'students' && (
-                    <div className="teacher-content-wrapper">
-                        <div className="teacher-section-header">
-                            <h1 className="teacher-section-title">학생 명단 관리</h1>
-                            <p className="teacher-section-subtitle">엑셀 데이터를 복사해서 붙여넣으세요.</p>
-                        </div>
-
-                        <div className="teacher-grid-2">
-                            {/* Input Area */}
-                            <div className="teacher-content-card">
-                                <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Upload size={20} style={{ color: '#3b82f6' }} /> 데이터 붙여넣기
-                                </h2>
-                                <div className="teacher-alert-info" style={{ marginBottom: '16px' }}>
-                                    <strong>형식:</strong> [학급] [번호] [이름] [역량 (상/중/하)]<br />
-                                    (엑셀에서 복사하면 자동으로 탭으로 구분됩니다)
-                                </div>
-                                <textarea
-                                    className="teacher-textarea"
-                                    rows={12}
-                                    placeholder={`예시:\n3학년 1반\t13번\t김철수\t상\n3학년 1반\t14번\t이영희\t중`}
-                                    value={bulkStudentText}
-                                    onChange={e => setBulkStudentText(e.target.value)}
-                                    style={{ fontFamily: 'monospace', fontSize: '13px' }}
-                                />
-                                <button
-                                    onClick={handleParseStudents}
-                                    className="teacher-button-secondary"
-                                    style={{ width: '100%', marginTop: '12px' }}
-                                >
-                                    데이터 미리보기 (파싱)
-                                </button>
-                            </div>
-
-                            {/* Preview Area */}
-                            <div className="teacher-content-card">
-                                <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <CheckCircle size={20} style={{ color: '#10b981' }} /> 미리보기
-                                </h2>
-
-                                {parsedStudents.length === 0 && savedStudents.length === 0 ? (
-                                    <div className="teacher-alert-info">
-                                        왼쪽에 데이터를 붙여넣고 "데이터 미리보기" 버튼을 클릭하세요.
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* Parsed Students (not yet saved) */}
-                                        {parsedStudents.length > 0 && (
-                                            <>
-                                                <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '8px', color: '#f59e0b' }}>
-                                                    📋 파싱된 데이터 (저장 전)
-                                                </div>
-                                                <div className="teacher-student-preview" style={{ marginBottom: '16px' }}>
-                                                    <div className="teacher-student-row teacher-student-header">
-                                                        <div>학급</div>
-                                                        <div>번호</div>
-                                                        <div>이름</div>
-                                                        <div>역량</div>
-                                                    </div>
-                                                    {parsedStudents.map((s, idx) => (
-                                                        <div key={idx} className="teacher-student-row">
-                                                            <div>{s.class}</div>
-                                                            <div>{s.number}</div>
-                                                            <div>{s.name}</div>
-                                                            <div>{s.competency}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="teacher-alert-success">
-                                                    ✓ {parsedStudents.length}명의 학생 데이터가 파싱되었습니다.
-                                                </div>
-                                                <button
-                                                    onClick={handleSaveStudents}
-                                                    className="teacher-button-primary"
-                                                    style={{ width: '100%', marginTop: '12px' }}
-                                                >
-                                                    <Save size={18} /> 데이터베이스에 저장
-                                                </button>
-                                            </>
-                                        )}
-
-                                        {/* Saved Students */}
-                                        {savedStudents.length > 0 && (
-                                            <>
-                                                <div style={{ fontSize: '14px', fontWeight: 'bold', marginTop: parsedStudents.length > 0 ? '24px' : '0', marginBottom: '8px', color: '#10b981', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <span>✅ 저장된 학생 ({savedStudents.length}명)</span>
-                                                    {selectedStudentsForDeletion.length > 0 && (
-                                                        <button
-                                                            onClick={handleDeleteSelectedStudents}
-                                                            className="teacher-button-danger"
-                                                            style={{ padding: '6px 12px', fontSize: '12px' }}
-                                                        >
-                                                            <Trash2 size={14} /> {selectedStudentsForDeletion.length}명 삭제
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                <div className="teacher-student-preview">
-                                                    <div className="teacher-student-row teacher-student-header">
-                                                        <div style={{ width: '40px', textAlign: 'center' }}>
-                                                            <input
-                                                                type="checkbox"
-                                                                checked={selectedStudentsForDeletion.length === savedStudents.length && savedStudents.length > 0}
-                                                                onChange={handleToggleAllStudents}
-                                                                style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                                                            />
-                                                        </div>
-                                                        <div
-                                                            onClick={() => handleSortColumn('class')}
-                                                            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                                        >
-                                                            학급 {sortColumn === 'class' && (sortDirection === 'asc' ? '▲' : '▼')}
-                                                        </div>
-                                                        <div
-                                                            onClick={() => handleSortColumn('number')}
-                                                            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                                        >
-                                                            번호 {sortColumn === 'number' && (sortDirection === 'asc' ? '▲' : '▼')}
-                                                        </div>
-                                                        <div
-                                                            onClick={() => handleSortColumn('name')}
-                                                            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                                        >
-                                                            이름 {sortColumn === 'name' && (sortDirection === 'asc' ? '▲' : '▼')}
-                                                        </div>
-                                                        <div
-                                                            onClick={() => handleSortColumn('competency')}
-                                                            style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: '4px' }}
-                                                        >
-                                                            역량 {sortColumn === 'competency' && (sortDirection === 'asc' ? '▲' : '▼')}
-                                                        </div>
-                                                    </div>
-                                                    {sortedStudents.map((s) => (
-                                                        <div key={s.id} className="teacher-student-row">
-                                                            <div style={{ width: '40px', textAlign: 'center' }}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedStudentsForDeletion.includes(s.id)}
-                                                                    onChange={() => handleToggleStudentSelection(s.id)}
-                                                                    style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                                                                />
-                                                            </div>
-                                                            <div>{s.class}</div>
-                                                            <div>{s.number}</div>
-                                                            <div>{s.name}</div>
-                                                            <div>{s.competency}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </>
-                                        )}
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                    <StudentsTab
+                        bulkStudentText={bulkStudentText}
+                        onChangeBulkText={setBulkStudentText}
+                        parsedStudents={parsedStudents}
+                        savedStudents={savedStudents}
+                        sortedStudents={sortedStudents}
+                        selectedStudentsForDeletion={selectedStudentsForDeletion}
+                        sortColumn={sortColumn}
+                        sortDirection={sortDirection}
+                        onParseStudents={handleParseStudents}
+                        onSaveStudents={handleSaveStudents}
+                        onDeleteSelectedStudents={handleDeleteSelectedStudents}
+                        onToggleAllStudents={handleToggleAllStudents}
+                        onSortColumn={handleSortColumn}
+                        onToggleStudentSelection={handleToggleStudentSelection}
+                    />
                 )}
 
                 {/* --- TAB: Settings --- */}
                 {activeTab === 'settings' && (
-                    <div className="teacher-content-wrapper">
-                        <div className="teacher-section-header" style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            marginBottom: '24px'
-                        }}>
-                            <div>
-                                <h1 className="teacher-section-title">설정</h1>
-                                <p className="teacher-section-subtitle">시스템 설정을 관리하세요.</p>
-                            </div>
-                            <button onClick={handleSaveSettings} className="teacher-button-primary">
-                                <Save size={18} /> 설정 저장
-                            </button>
-                        </div>
-
-
-                        {/* Master Config Section */}
-                        {teacherRole === 'master' && (
-                            <>
-                                <div className="teacher-content-card" style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}>
-                                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e40af' }}>
-                                        🛠️ 시스템 설정 (관리자 전용)
-                                    </h3>
-                                    <div className="teacher-input-group">
-                                        <label className="teacher-input-label">일반 교사 문항 등록 제한 수</label>
-                                        <input
-                                            type="number"
-                                            className="teacher-input-field"
-                                            value={limitInput}
-                                            onChange={e => setLimitInput(e.target.value)}
-                                            placeholder="50"
-                                        />
-                                        <div className="teacher-alert-info">
-                                            모든 일반 교사에게 적용되는 문항 등록 최대 개수입니다.
-                                        </div>
-                                    </div>
-
-                                    <div className="teacher-input-group" style={{ marginTop: '20px' }}>
-                                        <label className="teacher-input-label">로그인 페이지 안내 문구</label>
-                                        <textarea
-                                            className="teacher-textarea"
-                                            rows={5}
-                                            value={loginNoticeText}
-                                            onChange={e => setLoginNoticeText(e.target.value)}
-                                            placeholder="안내 문구를 입력하세요. {limit}를 입력하면 '일반 교사 문항 등록 제한 수'로 자동 변환됩니다."
-                                            style={{ lineHeight: '1.6' }}
-                                        />
-                                        <div className="teacher-alert-info" style={{ marginTop: '8px' }}>
-                                            줄바꿈(Enter) 시 번호 매기기 목록(1, 2, 3...)으로 표시됩니다.
-                                            <br />문구 내에 <strong>{`{limit}`}</strong>를 입력하면 위의 '문항 등록 제한 수' 값으로 자동 치환됩니다.
-                                            <br />이메일 주소를 입력하면 자동으로 이메일 보내기 링크가 생성됩니다.
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Teacher Management Table */}
-                                <div className="teacher-content-card" style={{ border: '2px solid #3b82f6', background: '#eff6ff' }}>
-                                    <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', color: '#1e40af' }}>
-                                        👥 교사 회원 관리
-                                    </h3>
-                                    {teacherList.length === 0 ? (
-                                        <div style={{ textAlign: 'center', color: '#6b7280', padding: '24px' }}>
-                                            등록된 일반 교사가 없습니다.
-                                        </div>
-                                    ) : (
-                                        <div style={{ overflowX: 'auto' }}>
-                                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-                                                <thead>
-                                                    <tr style={{ background: '#dbeafe', borderBottom: '2px solid #93c5fd' }}>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'left', fontWeight: '600', color: '#1e40af', width: '30%' }}>이메일</th>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#1e40af', width: '15%' }}>상태</th>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#1e40af', width: '25%' }}>문항 제한수</th>
-                                                        <th style={{ padding: '10px 12px', textAlign: 'center', fontWeight: '600', color: '#1e40af', width: '30%' }}>관리</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {teacherList.map((t) => (
-                                                        <tr key={t.id} style={{ borderBottom: '1px solid #e5e7eb', background: t.is_active ? 'white' : '#fef2f2' }}>
-                                                            <td style={{ padding: '10px 12px', color: t.is_active ? '#222' : '#9ca3af' }}>
-                                                                {t.email}
-                                                                {!t.is_active && <span style={{ marginLeft: '8px', fontSize: '11px', color: '#ef4444' }}>(중지됨)</span>}
-                                                            </td>
-                                                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                                                <span style={{
-                                                                    display: 'inline-block',
-                                                                    padding: '2px 10px',
-                                                                    borderRadius: '12px',
-                                                                    fontSize: '12px',
-                                                                    fontWeight: '600',
-                                                                    background: t.is_active ? '#dcfce7' : '#fee2e2',
-                                                                    color: t.is_active ? '#166534' : '#991b1b'
-                                                                }}>
-                                                                    {t.is_active ? '✅ 활성' : '⛔ 중지'}
-                                                                </span>
-                                                            </td>
-                                                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                                                                    <input
-                                                                        type="number"
-                                                                        min={0}
-                                                                        step={1}
-                                                                        style={{
-                                                                            width: '70px',
-                                                                            padding: '4px 8px',
-                                                                            border: '1px solid #d1d5db',
-                                                                            borderRadius: '6px',
-                                                                            textAlign: 'center',
-                                                                            fontSize: '13px'
-                                                                        }}
-                                                                        value={teacherLimitDrafts[t.id] ?? String(t.max_questions ?? maxQuestionsLimit)}
-                                                                        onChange={(e) => {
-                                                                            const val = e.target.value;
-                                                                            setTeacherLimitDrafts(prev => ({ ...prev, [t.id]: val }));
-                                                                        }}
-                                                                        onBlur={() => {
-                                                                            if (!(t.id in teacherLimitDrafts)) return;
-                                                                            const raw = teacherLimitDrafts[t.id].trim();
-                                                                            if (raw === '') {
-                                                                                if (t.max_questions !== null) {
-                                                                                    void handleUpdateTeacherLimit(t, '');
-                                                                                } else {
-                                                                                    setTeacherLimitDrafts(prev => {
-                                                                                        const next = { ...prev };
-                                                                                        delete next[t.id];
-                                                                                        return next;
-                                                                                    });
-                                                                                }
-                                                                                return;
-                                                                            }
-                                                                            if (!/^\d+$/.test(raw)) {
-                                                                                alert('개별 문항 제한수는 0 이상의 정수로 입력해주세요.');
-                                                                                setTeacherLimitDrafts(prev => {
-                                                                                    const next = { ...prev };
-                                                                                    delete next[t.id];
-                                                                                    return next;
-                                                                                });
-                                                                                return;
-                                                                            }
-                                                                            if (Number(raw) !== t.max_questions) {
-                                                                                void handleUpdateTeacherLimit(t, raw);
-                                                                            } else {
-                                                                                setTeacherLimitDrafts(prev => {
-                                                                                    const next = { ...prev };
-                                                                                    delete next[t.id];
-                                                                                    return next;
-                                                                                });
-                                                                            }
-                                                                        }}
-                                                                        onKeyDown={(e) => {
-                                                                            if (e.key === 'Enter') {
-                                                                                (e.target as HTMLInputElement).blur();
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                    {t.max_questions === null && (
-                                                                        <span style={{ fontSize: '11px', color: '#6b7280', background: '#f3f4f6', padding: '2px 6px', borderRadius: '4px' }}>기본값</span>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td style={{ padding: '10px 12px', textAlign: 'center' }}>
-                                                                <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'nowrap' }}>
-                                                                    <button
-                                                                        onClick={() => handleToggleTeacherActive(t)}
-                                                                        style={{
-                                                                            padding: '4px 12px',
-                                                                            border: 'none',
-                                                                            borderRadius: '6px',
-                                                                            fontSize: '12px',
-                                                                            fontWeight: '500',
-                                                                            cursor: 'pointer',
-                                                                            background: t.is_active ? '#fef3c7' : '#dcfce7',
-                                                                            color: t.is_active ? '#92400e' : '#166534',
-                                                                            transition: 'all 0.2s',
-                                                                            whiteSpace: 'nowrap'
-                                                                        }}
-                                                                    >
-                                                                        {t.is_active ? '🚫 중지' : '✅ 활성화'}
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeleteTeacher(t)}
-                                                                        style={{
-                                                                            padding: '4px 12px',
-                                                                            border: 'none',
-                                                                            borderRadius: '6px',
-                                                                            fontSize: '12px',
-                                                                            fontWeight: '500',
-                                                                            cursor: 'pointer',
-                                                                            background: '#fee2e2',
-                                                                            color: '#991b1b',
-                                                                            transition: 'all 0.2s',
-                                                                            whiteSpace: 'nowrap'
-                                                                        }}
-                                                                    >
-                                                                        🗑️ 삭제
-                                                                    </button>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </div>
-                            </>
-                        )}
-
-                        {/* API Key */}
-                        <div className="teacher-content-card">
-                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                🔑 OpenAI API 키 (필수 사항)
-                            </h3>
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">API 키</label>
-                                <input
-                                    type="password"
-                                    className="teacher-input-field"
-                                    placeholder="sk-..."
-                                    value={apiKey}
-                                    onChange={e => setApiKey(e.target.value)}
-                                />
-                                <div className="teacher-alert-info">
-                                    🔒 API 키는 교사 본인 계정에 안전하게 저장되며, 서버 프록시(Edge Function) 모드 사용 시 학생 브라우저로 노출되지 않습니다.
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Google Drive Integration */}
-                        <div className="teacher-content-card" style={{ opacity: teacherRole === 'master' ? 1 : 0.6 }}>
-                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <span>📁 구글 드라이브 연동 (선택 사항)</span>
-                                {teacherRole !== 'master' && (
-                                    <span style={{ fontSize: '12px', background: '#e2e8f0', color: '#64748b', padding: '2px 8px', borderRadius: '12px', fontWeight: 'normal' }}>준비 중</span>
-                                )}
-                            </h3>
-
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">Google Apps Script URL (웹 앱 URL)</label>
-                                <input
-                                    type="text"
-                                    className="teacher-input-field"
-                                    placeholder="https://script.google.com/macros/s/.../exec"
-                                    value={googleScriptUrl}
-                                    onChange={e => setGoogleScriptUrl(e.target.value)}
-                                    disabled={teacherRole !== 'master'}
-                                    style={{ cursor: teacherRole !== 'master' ? 'not-allowed' : 'text', background: teacherRole !== 'master' ? '#f1f5f9' : 'white' }}
-                                />
-                                <div className="teacher-alert-info">
-                                    대화 내용을 구글 드라이브에 저장하려면, 본인 구글 계정으로 Apps Script를 생성하고 웹 앱으로 배포한 URL을 입력하세요.
-                                </div>
-                            </div>
-
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">구글 드라이브 폴더 ID</label>
-                                <input
-                                    type="text"
-                                    className="teacher-input-field"
-                                    placeholder="1AbC2DeF3GhI4JkL5MnO6PqR7StU8VwX9YzA"
-                                    value={driveFolderId}
-                                    onChange={e => setDriveFolderId(e.target.value)}
-                                    disabled={teacherRole !== 'master'}
-                                    style={{ cursor: teacherRole !== 'master' ? 'not-allowed' : 'text', background: teacherRole !== 'master' ? '#f1f5f9' : 'white' }}
-                                />
-                                <div className="teacher-alert-info">
-                                    대화 내용이 저장될 폴더의 ID입니다. (URL의 folders/ 뒷부분)
-                                </div>
-                            </div>
-
-                            {teacherRole !== 'master' && (
-                                <div style={{ marginTop: '16px', padding: '12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '13px', color: '#64748b', textAlign: 'center' }}>
-                                    💡 일반 교사분들을 위한 <strong>구글 드라이브 간편 연동 기능</strong>이 곧 지원될 예정입니다.
-                                </div>
-                            )}
-                        </div>
-
-                        {/* System Prompt */}
-                        <div className="teacher-content-card">
-                            <h3 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>
-                                AI 기본 시스템 프롬프트 (Persona)
-                            </h3>
-                            <div className="teacher-input-group">
-                                <label className="teacher-input-label">시스템 프롬프트</label>
-                                <textarea
-                                    rows={4}
-                                    className="teacher-textarea"
-                                    value={systemPrompt || ''}
-                                    onChange={e => setSystemPrompt(e.target.value)}
-                                />
-                                <div className="teacher-alert-info">
-                                    모든 대화에 기본적으로 적용되는 AI의 성격입니다.
-                                </div>
-                            </div>
-                        </div>
-
-
-                    </div>
+                    <SettingsTab
+                        teacherRole={teacherRole}
+                        apiKey={apiKey}
+                        onChangeApiKey={setApiKey}
+                        systemPrompt={systemPrompt}
+                        onChangeSystemPrompt={setSystemPrompt}
+                        driveFolderId={driveFolderId}
+                        onChangeDriveFolderId={setDriveFolderId}
+                        googleScriptUrl={googleScriptUrl}
+                        onChangeGoogleScriptUrl={setGoogleScriptUrl}
+                        limitInput={limitInput}
+                        onChangeLimitInput={setLimitInput}
+                        loginNoticeText={loginNoticeText}
+                        onChangeLoginNoticeText={setLoginNoticeText}
+                        maxQuestionsLimit={maxQuestionsLimit}
+                        teacherList={teacherList}
+                        teacherLimitDrafts={teacherLimitDrafts}
+                        onChangeTeacherLimitDraft={(id, val) => setTeacherLimitDrafts(prev => ({ ...prev, [id]: val }))}
+                        onClearTeacherLimitDraft={(id) => setTeacherLimitDrafts(prev => {
+                            const next = { ...prev };
+                            delete next[id];
+                            return next;
+                        })}
+                        onSaveSettings={handleSaveSettings}
+                        onUpdateTeacherLimit={handleUpdateTeacherLimit}
+                        onToggleTeacherActive={handleToggleTeacherActive}
+                        onDeleteTeacher={handleDeleteTeacher}
+                    />
                 )}
 
             </main>

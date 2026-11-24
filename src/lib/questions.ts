@@ -1,10 +1,5 @@
 import { supabase } from './supabase'
-import {
-    attachEmbeddedQuestionMeta,
-    extractEmbeddedQuestionMeta,
-    isTextbookQuestion,
-    safeParseLogicFlow,
-} from './logic-flow'
+import { attachEmbeddedQuestionMeta, extractEmbeddedQuestionMeta, safeParseLogicFlow } from './logic-flow'
 import {
     formatSourceSummary,
     normalizeGrade,
@@ -12,24 +7,9 @@ import {
     normalizeSourceNumber,
     normalizeTags,
     normalizeYear,
-    parseQuestionSource,
 } from './question-meta'
+import { mapQuestionRecord, type QuestionFallbackMeta, type RawQuestionRecord } from './question-mapper'
 import type { PassageType, Question } from '../types'
-
-interface QuestionRow {
-    id: number
-    exam_code: string
-    target_grade?: string | null
-    source_year?: string | null
-    source_grade?: string | null
-    source_month?: string | null
-    source_number?: string | null
-    tags?: unknown
-    topic?: string | null
-    logic_flow?: Question['logicFlow'] | null
-    passage?: string | null
-    passage_type?: PassageType | null
-}
 
 interface QuestionDbWrite {
     teacher_id?: string
@@ -91,59 +71,8 @@ async function ensureExtendedColumnsSupport(): Promise<boolean> {
     return true
 }
 
-function mapQuestionRow(
-    item: QuestionRow,
-    fallback?: {
-        passageType?: PassageType
-        tags?: string[]
-        sourceYear?: string
-        sourceGrade?: string
-        sourceMonth?: string
-        sourceNumber?: string
-    }
-): Question {
-    const topic = item.topic || ''
-    const embedded = extractEmbeddedQuestionMeta(item.logic_flow)
-    const cleanFlow = safeParseLogicFlow(item.logic_flow)
-    const explicitType = item.passage_type ?? embedded?.passageType ?? fallback?.passageType
-    const passageType: PassageType = isTextbookQuestion({
-        passageType: explicitType,
-        topic,
-        logicFlow: item.logic_flow,
-    })
-        ? 'textbook'
-        : 'csat'
-
-    const rawSourceNumber =
-        (item.source_number ?? '').trim() || embedded?.sourceNumber || fallback?.sourceNumber
-    const parsedSource = parseQuestionSource({
-        sourceYear: (item.source_year ?? '').trim() || embedded?.sourceYear || fallback?.sourceYear,
-        sourceGrade: (item.source_grade ?? '').trim() || embedded?.sourceGrade || fallback?.sourceGrade,
-        sourceMonth: (item.source_month ?? '').trim() || embedded?.sourceMonth || fallback?.sourceMonth,
-        sourceNumber: rawSourceNumber || undefined,
-        targetGrade: item.target_grade,
-    })
-
-    const nativeTags = normalizeTags(item.tags)
-    const embeddedTags = normalizeTags(embedded?.tags)
-    const fallbackTags = normalizeTags(fallback?.tags)
-    const tags = nativeTags.length > 0 ? nativeTags : embeddedTags.length > 0 ? embeddedTags : fallbackTags
-    const formattedSource = formatSourceSummary(parsedSource)
-
-    return {
-        id: item.id,
-        examCode: item.exam_code,
-        targetGrade: formattedSource || (item.target_grade ?? '').trim(),
-        sourceYear: parsedSource.sourceYear,
-        sourceGrade: parsedSource.sourceGrade,
-        sourceMonth: parsedSource.sourceMonth,
-        sourceNumber: parsedSource.sourceNumber,
-        tags,
-        topic,
-        logicFlow: cleanFlow,
-        passage: item.passage || '',
-        passageType: explicitType ?? passageType,
-    }
+function mapQuestionRow(item: RawQuestionRecord, fallback?: QuestionFallbackMeta): Question {
+    return mapQuestionRecord(item, fallback)
 }
 
 /**
@@ -162,7 +91,7 @@ export async function getQuestions(): Promise<Question[]> {
     if (error) throw error
 
     // DB 컬럼명을 Question 타입으로 변환
-    return ((data || []) as QuestionRow[]).map((item) => mapQuestionRow(item))
+    return ((data || []) as RawQuestionRecord[]).map((item) => mapQuestionRow(item))
 }
 
 /**
@@ -219,7 +148,7 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
 
         if (!extendedResult.error) {
             extendedColumnsSupported = true
-            return mapQuestionRow(extendedResult.data as QuestionRow, fallbackInfo)
+            return mapQuestionRow(extendedResult.data as RawQuestionRecord, fallbackInfo)
         }
 
         if (!isMissingQuestionColumnError(extendedResult.error)) {
@@ -251,7 +180,7 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
         .single()
 
     if (fallbackResult.error) throw fallbackResult.error
-    return mapQuestionRow(fallbackResult.data as QuestionRow, fallbackInfo)
+    return mapQuestionRow(fallbackResult.data as RawQuestionRecord, fallbackInfo)
 }
 
 /**
@@ -313,7 +242,7 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
 
         if (!extendedResult.error) {
             extendedColumnsSupported = true
-            return mapQuestionRow(extendedResult.data as QuestionRow, fallbackInfo)
+            return mapQuestionRow(extendedResult.data as RawQuestionRecord, fallbackInfo)
         }
 
         if (!isMissingQuestionColumnError(extendedResult.error)) {
@@ -366,7 +295,7 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
         .single()
 
     if (fallbackResult.error) throw fallbackResult.error
-    return mapQuestionRow(fallbackResult.data as QuestionRow, fallbackInfo)
+    return mapQuestionRow(fallbackResult.data as RawQuestionRecord, fallbackInfo)
 }
 
 /**

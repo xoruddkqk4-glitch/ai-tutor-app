@@ -9,7 +9,6 @@ export interface TeacherSettings {
 }
 
 export async function getTeacherSettings(teacherId: string): Promise<TeacherSettings> {
-    console.log('Fetching settings for ID:', teacherId);
     const { data, error } = await supabase
         .from('teachers')
         .select('openai_api_key, system_prompt, drive_folder_id, google_script_url, max_questions')
@@ -52,7 +51,6 @@ export async function getTeacherSettings(teacherId: string): Promise<TeacherSett
 }
 
 export async function updateTeacherSettings(teacherId: string, settings: Partial<TeacherSettings>): Promise<void> {
-    console.log('Updating settings for ID:', teacherId);
     const { error } = await supabase
         .from('teachers')
         .update(settings)
@@ -62,7 +60,6 @@ export async function updateTeacherSettings(teacherId: string, settings: Partial
         console.error('updateTeacherSettings error:', error);
         throw error;
     }
-    console.log('Update success');
 }
 
 // App Config (Global Settings for Master)

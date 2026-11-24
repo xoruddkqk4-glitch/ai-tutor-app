@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
-import { extractEmbeddedQuestionMeta, isTextbookQuestion, safeParseLogicFlow } from './logic-flow';
-import { formatSourceSummary, normalizeTags, parseQuestionSource } from './question-meta';
-import type { Student, Question, PassageType, RoomPublicInfo } from '../types';
+import { mapQuestionRecord, type RawQuestionRecord } from './question-mapper';
+import type { Student, Question, RoomPublicInfo } from '../types';
 
 interface RawRpcStudent {
     id: number;
@@ -12,33 +11,10 @@ interface RawRpcStudent {
     competency?: string | null;
 }
 
-interface RawRpcQuestion {
-    id: number;
-    exam_code?: string | null;
-    examCode?: string | null;
-    target_grade?: string | null;
-    targetGrade?: string | null;
-    source_year?: string | null;
-    sourceYear?: string | null;
-    source_grade?: string | null;
-    sourceGrade?: string | null;
-    source_month?: string | null;
-    sourceMonth?: string | null;
-    source_number?: string | null;
-    sourceNumber?: string | null;
-    tags?: unknown;
-    topic?: string | null;
-    logic_flow?: Question['logicFlow'] | null;
-    logicFlow?: Question['logicFlow'] | null;
-    passage?: string | null;
-    passage_type?: PassageType | null;
-    passageType?: PassageType | null;
-}
-
 interface RawRpcResponse {
     room?: RoomPublicInfo | null;
     students?: RawRpcStudent[] | null;
-    questions?: RawRpcQuestion[] | null;
+    questions?: RawQuestionRecord[] | null;
 }
 
 export async function fetchRoomData(code: string): Promise<{
@@ -53,51 +29,7 @@ export async function fetchRoomData(code: string): Promise<{
 
     const payload = (data ?? null) as RawRpcResponse | null;
 
-    const rawQuestions = payload?.questions ?? [];
-    const mappedQuestions: Question[] = rawQuestions.map((q) => {
-        const topicStr = q.topic ?? '';
-        const rawFlow = q.logic_flow ?? q.logicFlow ?? undefined;
-        const embedded = extractEmbeddedQuestionMeta(rawFlow);
-        const cleanFlow = safeParseLogicFlow(rawFlow);
-        const explicitType = q.passage_type ?? q.passageType ?? embedded?.passageType ?? undefined;
-        const derivedType: PassageType = isTextbookQuestion({
-            passageType: explicitType,
-            topic: topicStr,
-            logicFlow: rawFlow,
-        })
-            ? 'textbook'
-            : 'csat';
-
-        const examCode = q.exam_code || q.examCode || '';
-        const rawTargetGrade = q.target_grade || q.targetGrade || '';
-        const rawSourceNumber = (q.source_number ?? q.sourceNumber ?? '').trim() || embedded?.sourceNumber;
-        const parsedSource = parseQuestionSource({
-            sourceYear: (q.source_year ?? q.sourceYear ?? '').trim() || embedded?.sourceYear,
-            sourceGrade: (q.source_grade ?? q.sourceGrade ?? '').trim() || embedded?.sourceGrade,
-            sourceMonth: (q.source_month ?? q.sourceMonth ?? '').trim() || embedded?.sourceMonth,
-            sourceNumber: rawSourceNumber || undefined,
-            targetGrade: rawTargetGrade,
-        });
-        const nativeTags = normalizeTags(q.tags);
-        const embeddedTags = normalizeTags(embedded?.tags);
-        const tags = nativeTags.length > 0 ? nativeTags : embeddedTags;
-        const targetGrade = formatSourceSummary(parsedSource) || rawTargetGrade.trim();
-
-        return {
-            id: q.id,
-            examCode,
-            targetGrade,
-            sourceYear: parsedSource.sourceYear,
-            sourceGrade: parsedSource.sourceGrade,
-            sourceMonth: parsedSource.sourceMonth,
-            sourceNumber: parsedSource.sourceNumber,
-            tags,
-            topic: topicStr,
-            logicFlow: cleanFlow,
-            passage: q.passage || '',
-            passageType: explicitType ?? derivedType,
-        };
-    });
+    const mappedQuestions: Question[] = (payload?.questions ?? []).map((q) => mapQuestionRecord(q));
 
     const mappedStudents: Student[] = (payload?.students ?? []).map((s) => {
         const classStr = String(s.class ?? s.className ?? '');
