@@ -274,3 +274,10 @@ This project is private and for educational use only.
   - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
 
+## [2026-11-24 12:46] 업데이트 이력 (Commit ID: `dcf5418`)
+- **수정 내용**:
+  - **`.gitignore` 정비**: Supabase CLI 연결 시 생성되는 임시 디렉터리(`supabase/.temp/`)를 Git 추적 제외 목록에 추가
+  - **Phase 4 SQL 안정화 (`supabase/sql/phase4_security_and_transactions.sql`)**: `BEGIN/COMMIT` 트랜잭션 블록, `questions.passage_type` 선행 `ADD COLUMN IF NOT EXISTS`, 기존 `get_active_room_data(text)` 반환 타입 충돌 방지용 `DROP FUNCTION IF EXISTS`, `GRANT EXECUTE` 권한 부여 반영
+- **검증 결과**:
+  - `git status --short`: `supabase/.temp/` 추적 제외 및 작업 트리 정리 확인
+
