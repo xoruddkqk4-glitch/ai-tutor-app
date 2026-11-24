@@ -14,7 +14,7 @@ import {
 } from '../lib/tutor-prompts';
 import { splitEnglishSentences } from '../lib/text';
 import { getErrorMessage } from '../lib/errors';
-import { Send, User, Bot, Users, ArrowLeft, CheckSquare, Square, BookOpen, SlidersHorizontal } from 'lucide-react';
+import { Send, User, Bot, Users, ArrowLeft, CheckSquare, Square, BookOpen, SlidersHorizontal, ArrowUpDown } from 'lucide-react';
 
 export default function StudentChatInterface({ onBack }: { onBack?: () => void } = {}) {
     // Helper for bold text
@@ -59,6 +59,7 @@ export default function StudentChatInterface({ onBack }: { onBack?: () => void }
 
     // Temporary selections
     const [tempQuestion, setTempQuestion] = useState<Question | null>(null);
+    const [questionSortOrder, setQuestionSortOrder] = useState<'asc' | 'desc'>('asc');
 
     // Track if this is a new session for Google Docs header
     const isNewDocSession = useRef(true);
@@ -855,11 +856,36 @@ export default function StudentChatInterface({ onBack }: { onBack?: () => void }
                     <div className="sc-modal-overlay" onClick={() => setShowQuestionModal(false)}>
                         <div className="sc-modal-box" onClick={e => e.stopPropagation()}>
                             <div className="sc-modal-header">
-                                <h3>문항 선택</h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <h3>문항 선택</h3>
+                                    <button
+                                        type="button"
+                                        onClick={() => setQuestionSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
+                                        title="정렬 순서 전환 (등록순 / 최신순)"
+                                        style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                            padding: '4px 10px',
+                                            borderRadius: '999px',
+                                            border: questionSortOrder === 'desc' ? '1px solid #3b82f6' : '1px solid #cbd5e1',
+                                            background: questionSortOrder === 'desc' ? '#eff6ff' : 'white',
+                                            color: questionSortOrder === 'desc' ? '#1d4ed8' : '#475569',
+                                            fontSize: '12px',
+                                            fontWeight: 600,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <ArrowUpDown size={13} />
+                                        {questionSortOrder === 'desc' ? '최신순 ↓' : '등록순 ↑'}
+                                    </button>
+                                </div>
                                 <button className="sc-modal-close-btn" onClick={() => setShowQuestionModal(false)}>&times;</button>
                             </div>
                             <div className="sc-modal-body">
-                                {roomQuestions.map(q => {
+                                {[...roomQuestions]
+                                    .sort((a, b) => (questionSortOrder === 'desc' ? b.id - a.id : a.id - b.id))
+                                    .map(q => {
                                     const qIsTextbook = isTextbookQuestion(q);
                                     return (
                                         <div
