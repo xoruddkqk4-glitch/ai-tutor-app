@@ -48,6 +48,16 @@ const emptyQuestionForm = (): Partial<Question> => ({
     passage: '',
 });
 
+type EditableFlowStep = LogicFlowStep & { _uid?: string };
+let nextFlowStepSeq = 1;
+const createEmptyFlowStep = (): EditableFlowStep => ({
+    macroLabel: '',
+    role: '',
+    conjunction: '',
+    content: '',
+    _uid: `flow_${nextFlowStepSeq++}`,
+});
+
 export default function TeacherAdminPage() {
     // --- State ---
     const [activeTab, setActiveTab] = useState<'welcome' | 'dashboard' | 'materials' | 'students' | 'settings'>('welcome');
@@ -118,11 +128,11 @@ export default function TeacherAdminPage() {
     const [selectedStudentsForDeletion, setSelectedStudentsForDeletion] = useState<number[]>([]);
 
     // Logic Flow Steps
-    const emptyFlowStep = (): LogicFlowStep => ({ macroLabel: '', role: '', conjunction: '', content: '' });
-    const [flowSteps, setFlowSteps] = useState<LogicFlowStep[]>([emptyFlowStep()]);
+    const [flowSteps, setFlowSteps] = useState<EditableFlowStep[]>(() => [createEmptyFlowStep()]);
 
     // Teacher Management (Master Only)
     const [teacherList, setTeacherList] = useState<TeacherRecord[]>([]);
+    const [teacherLimitDrafts, setTeacherLimitDrafts] = useState<Record<string, string>>({});
 
     // --- Handlers ---
 
@@ -131,8 +141,8 @@ export default function TeacherAdminPage() {
         console.log('[loadLoginConfig] Fetching fresh config for login page...');
         try {
             const limit = await getAppConfig('limit_regular_questions');
-            if (limit) {
-                setLoginQuestionLimit(Number(limit));
+            if (limit && /^\d+$/.test(limit.trim())) {
+                setLoginQuestionLimit(Number(limit.trim()));
             } else {
                 setLoginQuestionLimit(50); // 기본값 설정
             }
@@ -201,14 +211,18 @@ export default function TeacherAdminPage() {
     };
 
     const loadAppConfig = async () => {
-        const limit = await getAppConfig('limit_regular_questions');
-        if (limit) {
-            setMaxQuestionsLimit(Number(limit));
-            setLimitInput(limit);
-        }
-        const notice = await getAppConfig('login_notice_text');
-        if (notice) {
-            setLoginNoticeText(notice);
+        try {
+            const limit = await getAppConfig('limit_regular_questions');
+            if (limit && /^\d+$/.test(limit.trim())) {
+                setMaxQuestionsLimit(Number(limit.trim()));
+                setLimitInput(limit.trim());
+            }
+            const notice = await getAppConfig('login_notice_text');
+            if (notice) {
+                setLoginNoticeText(notice);
+            }
+        } catch (error: unknown) {
+            console.error('전역 설정 로드 실패:', error);
         }
     };
 
@@ -217,6 +231,7 @@ export default function TeacherAdminPage() {
         try {
             const data = await getAllTeachers();
             setTeacherList(data);
+            setTeacherLimitDrafts({});
         } catch (error: unknown) {
             console.error('교사 목록 로드 실패:', error);
         }
@@ -472,7 +487,7 @@ export default function TeacherAdminPage() {
     const resetQuestionForm = () => {
         setEditingQuestion(null);
         setNewQuestion(emptyQuestionForm());
-        setFlowSteps([emptyFlowStep()]);
+        setFlowSteps([createEmptyFlowStep()]);
         setPassageType('csat');
         setCustomYearMode(false);
         setCustomGradeMode(false);
@@ -600,12 +615,31 @@ export default function TeacherAdminPage() {
 
     // 교사 개별 문항 제한수 수정
     const handleUpdateTeacherLimit = async (teacher: TeacherRecord, value: string) => {
-        const numValue = value.trim() === '' ? null : Number(value);
+        const trimmed = value.trim();
+        let numValue: number | null = null;
+        if (trimmed !== '') {
+            if (!/^\d+$/.test(trimmed)) {
+                alert('개별 문항 제한수는 0 이상의 정수로 입력해주세요.');
+                setTeacherLimitDrafts(prev => {
+                    const next = { ...prev };
+                    delete next[teacher.id];
+                    return next;
+                });
+                return;
+            }
+            numValue = Number(trimmed);
+        }
+
         try {
             await updateTeacherMaxQuestions(teacher.id, numValue);
             await loadTeacherList();
         } catch (error: unknown) {
             alert('문항 제한수 수정 실패: ' + getErrorMessage(error));
+            setTeacherLimitDrafts(prev => {
+                const next = { ...prev };
+                delete next[teacher.id];
+                return next;
+            });
         }
     };
 
@@ -982,8 +1016,12 @@ export default function TeacherAdminPage() {
         const steps = safeParseLogicFlow(q.logicFlow);
         setFlowSteps(
             steps.length > 0
-                ? steps.map((s) => ({ ...s, macroLabel: s.macroLabel?.trim() || s.role?.trim() || '' }))
-                : [emptyFlowStep()]
+                ? steps.map((s) => ({
+                    ...s,
+                    macroLabel: s.macroLabel?.trim() || s.role?.trim() || '',
+                    _uid: `flow_${nextFlowStepSeq++}`,
+                }))
+                : [createEmptyFlowStep()]
         );
         setPassageType(isTextbookQuestion(q) ? 'textbook' : 'csat');
         formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1035,6 +1073,12 @@ export default function TeacherAdminPage() {
 
     const handleSaveSettings = async () => {
         try {
+            const trimmedLimit = limitInput.trim();
+            if (teacherRole === 'master' && !/^\d+$/.test(trimmedLimit)) {
+                alert('기본 문항 제한수는 0 이상의 정수로 입력해주세요.');
+                return;
+            }
+
             const user = await getCurrentUser();
             if (!user) return;
 
@@ -1048,9 +1092,10 @@ export default function TeacherAdminPage() {
 
             // 2. Global Config (Master Only)
             if (teacherRole === 'master') {
-                await updateAppConfig('limit_regular_questions', limitInput);
+                await updateAppConfig('limit_regular_questions', trimmedLimit);
                 await updateAppConfig('login_notice_text', loginNoticeText);
-                setMaxQuestionsLimit(Number(limitInput));
+                setLimitInput(trimmedLimit);
+                setMaxQuestionsLimit(Number(trimmedLimit));
             }
 
             alert('설정이 저장되었습니다.');
@@ -1878,7 +1923,7 @@ export default function TeacherAdminPage() {
                                     </div>
 
                                     {flowSteps.map((step, index) => (
-                                        <div key={index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <div key={step._uid ?? index} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                                             <div style={{
                                                 width: '24px', height: '24px',
                                                 borderRadius: '50%', background: passageType === 'textbook' ? '#94a3b8' : '#3b82f6',
@@ -1947,10 +1992,10 @@ export default function TeacherAdminPage() {
                                                     setFlowSteps(newSteps);
                                                 }}
                                                 onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') {
+                                                    if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
                                                         e.preventDefault();
                                                         const newSteps = [...flowSteps];
-                                                        newSteps.splice(index + 1, 0, emptyFlowStep());
+                                                        newSteps.splice(index + 1, 0, createEmptyFlowStep());
                                                         setFlowSteps(newSteps);
                                                     }
                                                 }}
@@ -1961,7 +2006,7 @@ export default function TeacherAdminPage() {
                                             <button
                                                 onClick={() => {
                                                     const newSteps = flowSteps.filter((_, i) => i !== index);
-                                                    setFlowSteps(newSteps.length ? newSteps : [emptyFlowStep()]);
+                                                    setFlowSteps(newSteps.length ? newSteps : [createEmptyFlowStep()]);
                                                 }}
                                                 disabled={passageType === 'textbook'}
                                                 className="teacher-button-secondary"
@@ -1973,7 +2018,7 @@ export default function TeacherAdminPage() {
                                         </div>
                                     ))}
                                     <button
-                                        onClick={() => setFlowSteps([...flowSteps, emptyFlowStep()])}
+                                        onClick={() => setFlowSteps([...flowSteps, createEmptyFlowStep()])}
                                         disabled={passageType === 'textbook'}
                                         className="teacher-button-secondary"
                                         style={{ alignSelf: 'start', marginTop: '4px' }}
@@ -2660,6 +2705,8 @@ export default function TeacherAdminPage() {
                                                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                                                                     <input
                                                                         type="number"
+                                                                        min={0}
+                                                                        step={1}
                                                                         style={{
                                                                             width: '70px',
                                                                             padding: '4px 8px',
@@ -2668,13 +2715,43 @@ export default function TeacherAdminPage() {
                                                                             textAlign: 'center',
                                                                             fontSize: '13px'
                                                                         }}
-                                                                        defaultValue={t.max_questions ?? maxQuestionsLimit}
-                                                                        onBlur={(e) => {
-                                                                            const newVal = e.target.value;
-                                                                            const currentVal = t.max_questions;
-                                                                            const defaultVal = maxQuestionsLimit;
-                                                                            if (Number(newVal) !== (currentVal ?? defaultVal)) {
-                                                                                handleUpdateTeacherLimit(t, newVal);
+                                                                        value={teacherLimitDrafts[t.id] ?? String(t.max_questions ?? maxQuestionsLimit)}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setTeacherLimitDrafts(prev => ({ ...prev, [t.id]: val }));
+                                                                        }}
+                                                                        onBlur={() => {
+                                                                            if (!(t.id in teacherLimitDrafts)) return;
+                                                                            const raw = teacherLimitDrafts[t.id].trim();
+                                                                            if (raw === '') {
+                                                                                if (t.max_questions !== null) {
+                                                                                    void handleUpdateTeacherLimit(t, '');
+                                                                                } else {
+                                                                                    setTeacherLimitDrafts(prev => {
+                                                                                        const next = { ...prev };
+                                                                                        delete next[t.id];
+                                                                                        return next;
+                                                                                    });
+                                                                                }
+                                                                                return;
+                                                                            }
+                                                                            if (!/^\d+$/.test(raw)) {
+                                                                                alert('개별 문항 제한수는 0 이상의 정수로 입력해주세요.');
+                                                                                setTeacherLimitDrafts(prev => {
+                                                                                    const next = { ...prev };
+                                                                                    delete next[t.id];
+                                                                                    return next;
+                                                                                });
+                                                                                return;
+                                                                            }
+                                                                            if (Number(raw) !== t.max_questions) {
+                                                                                void handleUpdateTeacherLimit(t, raw);
+                                                                            } else {
+                                                                                setTeacherLimitDrafts(prev => {
+                                                                                    const next = { ...prev };
+                                                                                    delete next[t.id];
+                                                                                    return next;
+                                                                                });
                                                                             }
                                                                         }}
                                                                         onKeyDown={(e) => {

@@ -76,7 +76,7 @@ export async function getAppConfig(key: string): Promise<string | null> {
     if (error) {
         if (error.code === 'PGRST116') return null; // Not found
         console.error('Config fetch error:', error);
-        return null;
+        throw error;
     }
     return data?.value || null;
 }

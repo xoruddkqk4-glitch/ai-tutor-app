@@ -48,20 +48,47 @@ interface QuestionDbWrite {
 
 let extendedColumnsSupported: boolean | null = null
 
-function isMissingQuestionColumnError(error: { code?: string; message?: string } | null): boolean {
+const EXTENDED_QUESTION_COLUMNS = [
+    'source_year',
+    'source_grade',
+    'source_month',
+    'source_number',
+    'tags',
+    'passage_type',
+] as const
+
+export function isMissingQuestionColumnError(error: { code?: string; message?: string } | null): boolean {
     if (!error) return false
     if (error.code === 'PGRST204' || error.code === '42703') return true
     const msg = error.message?.toLowerCase() ?? ''
+    const mentionsExtendedColumn = EXTENDED_QUESTION_COLUMNS.some((col) => msg.includes(col))
+    if (!mentionsExtendedColumn) return false
     return (
-        msg.includes('source_year') ||
-        msg.includes('source_grade') ||
-        msg.includes('source_month') ||
-        msg.includes('source_number') ||
-        msg.includes('tags') ||
-        msg.includes('passage_type') ||
-        msg.includes('schema cache') ||
-        msg.includes('column')
+        msg.includes('does not exist') ||
+        msg.includes('could not find') ||
+        msg.includes('schema cache')
     )
+}
+
+async function ensureExtendedColumnsSupport(): Promise<boolean> {
+    if (extendedColumnsSupported !== null) return extendedColumnsSupported
+    const { error } = await supabase
+        .from('questions')
+        .select('source_year, source_grade, source_month, source_number, tags, passage_type')
+        .limit(0)
+
+    if (!error) {
+        extendedColumnsSupported = true
+        return true
+    }
+
+    if (isMissingQuestionColumnError(error)) {
+        extendedColumnsSupported = false
+        return false
+    }
+
+    // 일시적인 네트워크/권한 오류는 폴백 모드로 고정하지 않음
+    return true
 }
 
 function mapQuestionRow(
@@ -166,7 +193,9 @@ export async function createQuestion(question: Omit<Question, 'id'>): Promise<Qu
         sourceNumber,
     }
 
-    if (extendedColumnsSupported !== false) {
+    const supportsExtended = await ensureExtendedColumnsSupport()
+
+    if (supportsExtended) {
         const extendedInsert: QuestionDbWrite = {
             teacher_id: user.id,
             exam_code: examCode,
@@ -258,7 +287,9 @@ export async function updateQuestion(id: number, updates: Partial<Omit<Question,
         sourceNumber,
     }
 
-    if (extendedColumnsSupported !== false) {
+    const supportsExtended = await ensureExtendedColumnsSupport()
+
+    if (supportsExtended) {
         const extendedUpdate: QuestionDbWrite = {}
         if (examCode !== undefined) extendedUpdate.exam_code = examCode
         if (targetGrade !== undefined) extendedUpdate.target_grade = targetGrade

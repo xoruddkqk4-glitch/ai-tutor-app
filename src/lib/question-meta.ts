@@ -213,6 +213,23 @@ function parseLegacyTargetGrade(targetGrade: string): ParsedQuestionSource {
     };
 }
 
+function extractExplicitNumberFromLegacy(targetGrade: string): string {
+    const trimmed = targetGrade.trim();
+    if (!trimmed) return '';
+
+    const explicitNumMatch = trimmed.match(/(?:문항\s*)?(?:#|No\.?\s*)?(?<!\d)(\d{1,3}(?:\s*[~-]\s*\d{1,3})?)\s*번/i);
+    if (explicitNumMatch) {
+        return `${explicitNumMatch[1].replace(/\s+/g, '')}번`;
+    }
+
+    const prefixedNumMatch = trimmed.match(/(?:#|No\.?\s*)(?<!\d)(\d{1,3}(?:\s*[~-]\s*\d{1,3})?)(?!\d)/i);
+    if (prefixedNumMatch) {
+        return `${prefixedNumMatch[1].replace(/\s+/g, '')}번`;
+    }
+
+    return '';
+}
+
 export function parseQuestionSource(q: {
     sourceYear?: string | null;
     sourceGrade?: string | null;
@@ -228,7 +245,7 @@ export function parseQuestionSource(q: {
     if (explicitYear || explicitGrade || explicitMonth || explicitNumber) {
         let fallbackNumber = '';
         if (!explicitNumber && q.sourceNumber === undefined && q.targetGrade) {
-            fallbackNumber = parseLegacyTargetGrade(q.targetGrade).sourceNumber;
+            fallbackNumber = extractExplicitNumberFromLegacy(q.targetGrade);
         }
         return {
             sourceYear: explicitYear,
@@ -256,14 +273,51 @@ export function formatSourceSummary(source: {
     return [yearLabel, grade, month, num].filter(Boolean).join(' ');
 }
 
+function expandNumberToken(startStr: string, endStr?: string): number[] {
+    const start = Number(startStr);
+    if (!Number.isFinite(start)) return [];
+    if (!endStr) return [start];
+    const end = Number(endStr);
+    if (!Number.isFinite(end) || end < start || end - start > 50) {
+        return [start, ...(Number.isFinite(end) ? [end] : [])];
+    }
+    const result: number[] = [];
+    for (let n = start; n <= end; n++) {
+        result.push(n);
+    }
+    return result;
+}
+
+function extractQuestionNumbers(str: string): number[] {
+    const trimmed = str.trim();
+    if (!trimmed) return [];
+
+    const bareMatch = trimmed.match(/^(\d{1,3})(?:\s*[~-]\s*(\d{1,3}))?$/);
+    if (bareMatch) {
+        return expandNumberToken(bareMatch[1], bareMatch[2]);
+    }
+
+    const result: number[] = [];
+    const regex = /(\d{1,3})(?:\s*[~-]\s*(\d{1,3}))?\s*번/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(trimmed)) !== null) {
+        result.push(...expandNumberToken(match[1], match[2]));
+    }
+    return result;
+}
+
 export function matchesQuestionNumberFilter(targetNumber: string, filterQuery: string): boolean {
     const query = filterQuery.trim();
     if (!query) return true;
 
     if (/^\d+번$/.test(query)) {
         const expected = Number(query.slice(0, -1));
-        const tokens = targetNumber.match(/\d+/g) ?? [];
-        return tokens.some((tok) => Number(tok) === expected);
+        return extractQuestionNumbers(targetNumber).includes(expected);
+    }
+
+    if (/^\d+$/.test(query)) {
+        const expected = Number(query);
+        return extractQuestionNumbers(targetNumber).includes(expected);
     }
 
     const normTarget = targetNumber.replace(/번|\s+/g, '').toLowerCase();
