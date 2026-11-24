@@ -15,6 +15,7 @@ export default function RoomEditWindow() {
     const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
     const [selectedQuestions, setSelectedQuestions] = useState<number[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -60,7 +61,8 @@ export default function RoomEditWindow() {
     };
 
     const handleSave = async () => {
-        if (!room) return;
+        if (!room || isSaving) return;
+        setIsSaving(true);
         try {
             if (room.id === 0) {
                 // Create
@@ -78,6 +80,8 @@ export default function RoomEditWindow() {
             window.close();
         } catch (e: unknown) {
             alert('저장 실패: ' + getErrorMessage(e));
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -222,13 +226,16 @@ export default function RoomEditWindow() {
                 </button>
                 <button
                     onClick={handleSave}
+                    disabled={isSaving}
                     style={{
                         padding: '10px 16px', borderRadius: '8px', border: 'none',
-                        background: '#2563eb', color: 'white', fontWeight: 'bold', cursor: 'pointer',
+                        background: isSaving ? '#93c5fd' : '#2563eb', color: 'white', fontWeight: 'bold',
+                        cursor: isSaving ? 'not-allowed' : 'pointer',
                         display: 'flex', alignItems: 'center', gap: '8px'
                     }}
                 >
-                    <Save size={18} /> {room.id === 0 ? '생성' : '수정'}
+                    {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {isSaving ? '저장 중...' : (room.id === 0 ? '생성' : '수정')}
                 </button>
             </div>
         </div>

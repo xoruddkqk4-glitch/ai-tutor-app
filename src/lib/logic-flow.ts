@@ -195,6 +195,24 @@ export function normalizeFlowStepsForSave(steps: LogicFlowStep[]): LogicFlowStep
         }));
 }
 
+/** 일부만 입력되고 필수 필드(큰 범주·중심 의미)가 비어 있는 행의 1-based 인덱스 목록 반환 */
+export function findIncompleteFlowStepIndices(steps: LogicFlowStep[]): number[] {
+    const incomplete: number[] = [];
+    steps.forEach((step, idx) => {
+        const hasAnyInput = Boolean(
+            step.macroLabel?.trim() ||
+            step.role?.trim() ||
+            step.conjunction?.trim() ||
+            step.content?.trim()
+        );
+        if (!hasAnyInput) return;
+        if (!step.macroLabel?.trim() || !step.content?.trim()) {
+            incomplete.push(idx + 1);
+        }
+    });
+    return incomplete;
+}
+
 /**
  * 문항의 지문 유형이 교과서 지문인지 판별합니다.
  * passageType이 명시되지 않은 구형 데이터는 주제·논리 흐름이 모두 비어 있을 때 교과서 지문으로 간주합니다.

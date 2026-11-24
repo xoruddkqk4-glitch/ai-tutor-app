@@ -119,11 +119,16 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
 
     const { data: teacher } = await supabase
         .from('teachers')
-        .select('role')
+        .select('role, is_active')
         .eq('id', user.id)
         .single()
 
     if (!teacher) return null
+
+    if (teacher.is_active === false) {
+        await supabase.auth.signOut()
+        return null
+    }
 
     return {
         id: user.id,

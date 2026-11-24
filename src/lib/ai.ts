@@ -1,4 +1,11 @@
 import { supabase } from './supabase';
+import {
+    AI_MODEL,
+    MAX_COMPLETION_TOKENS_BY_KIND,
+    REASONING_BY_KIND,
+    isReasoningModel,
+    type AiRequestKind,
+} from './ai-config';
 
 export type ChatApiMessage = {
     role: 'system' | 'user' | 'assistant';
@@ -10,8 +17,8 @@ export interface RequestAiCompletionParams {
     apiKey?: string;
     hasApiKey?: boolean;
     messages: ChatApiMessage[];
+    kind: AiRequestKind;
     model?: string;
-    temperature?: number;
 }
 
 /**
@@ -30,20 +37,25 @@ export function canUseRoomAi(room: { api_key?: string; has_api_key?: boolean } |
  * Edge Function 프록시(`ai-chat`) 또는 기존 클라이언트 키 직접 호출을 모두 지원합니다.
  */
 export async function requestAiCompletion(params: RequestAiCompletionParams): Promise<string> {
-    const model = params.model ?? 'gpt-4o';
-    const temperature = params.temperature ?? 0.7;
     const forceProxy = import.meta.env.VITE_USE_AI_PROXY === 'true';
     const useProxy = forceProxy || Boolean(params.hasApiKey && !params.apiKey?.trim());
 
     if (useProxy) {
-        const { data, error } = await supabase.functions.invoke<{ content?: string; error?: string }>('ai-chat', {
+        const { data, error } = await supabase.functions.invoke<{
+            content?: string;
+            error?: string;
+            usage?: Record<string, unknown> | null;
+        }>('ai-chat', {
             body: {
                 roomCode: params.roomCode,
                 messages: params.messages,
-                model,
-                temperature,
+                kind: params.kind,
             },
         });
+
+        if (import.meta.env.DEV && data?.usage) {
+            console.debug('[AI Usage]', data.usage);
+        }
 
         if (!error && data?.content?.trim()) {
             return data.content;
@@ -58,23 +70,42 @@ export async function requestAiCompletion(params: RequestAiCompletionParams): Pr
         throw new Error('API 키가 설정되지 않았습니다.');
     }
 
+    const model = params.model?.trim() || AI_MODEL;
+    const reasoningEffort = REASONING_BY_KIND[params.kind];
+    const maxCompletionTokens = MAX_COMPLETION_TOKENS_BY_KIND[params.kind];
+
+    const requestBody = isReasoningModel(model)
+        ? {
+            model,
+            messages: params.messages,
+            reasoning_effort: reasoningEffort,
+            max_completion_tokens: maxCompletionTokens,
+        }
+        : {
+            model,
+            messages: params.messages,
+            temperature: 0.7,
+            max_tokens: maxCompletionTokens,
+        };
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${params.apiKey}`,
         },
-        body: JSON.stringify({
-            model,
-            messages: params.messages,
-            temperature,
-        }),
+        body: JSON.stringify(requestBody),
     });
 
     const data = (await response.json().catch(() => null)) as {
         choices?: { message?: { content?: string } }[];
         error?: { message?: string };
+        usage?: Record<string, unknown>;
     } | null;
+
+    if (import.meta.env.DEV && data?.usage) {
+        console.debug('[AI Usage]', data.usage);
+    }
 
     if (!response.ok) {
         throw new Error(data?.error?.message || `OpenAI API 요청 실패 (HTTP ${response.status})`);

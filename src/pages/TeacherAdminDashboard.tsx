@@ -12,7 +12,7 @@ import { getRooms, deleteRoom, toggleRoomStatus } from '../lib/rooms';
 
 
 import { getTeacherSettings, updateTeacherSettings, getAppConfig, updateAppConfig, getAllTeachers, toggleTeacherActive, updateTeacherMaxQuestions, deleteTeacher, type TeacherRecord } from '../lib/settings';
-import { safeParseLogicFlow, normalizeFlowStepsForSave, isTextbookQuestion } from '../lib/logic-flow';
+import { safeParseLogicFlow, normalizeFlowStepsForSave, findIncompleteFlowStepIndices, isTextbookQuestion } from '../lib/logic-flow';
 import {
     PRIMARY_QUESTION_TAGS,
     SECONDARY_QUESTION_TAGS,
@@ -664,6 +664,14 @@ export default function TeacherAdminPage() {
             return;
         }
 
+        if (passageType === 'csat') {
+            const incompleteRows = findIncompleteFlowStepIndices(flowSteps);
+            if (incompleteRows.length > 0) {
+                alert(`논리 흐름 ${incompleteRows.join(', ')}행에 큰 범주 또는 중심 의미가 비어 있습니다. 저장 시 누락되지 않도록 모두 채우거나 빈 행을 삭제해 주세요.`);
+                return;
+            }
+        }
+
         const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
         if (passageType === 'csat' && logicFlowSaved.length === 0) {
             alert('수능형 지문: 논리 흐름 최소 1단계가 필요합니다. 각 단계마다 큰 범주와 중심 의미는 필수이며, 작은 범주는 선택입니다.');
@@ -708,6 +716,14 @@ export default function TeacherAdminPage() {
         if (!examCode || !newQuestion.passage?.trim()) {
             alert('문항 번호와 본문은 필수입니다.');
             return;
+        }
+
+        if (passageType === 'csat') {
+            const incompleteRows = findIncompleteFlowStepIndices(flowSteps);
+            if (incompleteRows.length > 0) {
+                alert(`논리 흐름 ${incompleteRows.join(', ')}행에 큰 범주 또는 중심 의미가 비어 있습니다. 저장 시 누락되지 않도록 모두 채우거나 빈 행을 삭제해 주세요.`);
+                return;
+            }
         }
 
         const logicFlowSaved = passageType === 'textbook' ? [] : normalizeFlowStepsForSave(flowSteps);
@@ -962,9 +978,13 @@ export default function TeacherAdminPage() {
         setCustomMonthMode(Boolean(parsed.sourceMonth && !(MONTH_PRESETS as readonly string[]).includes(parsed.sourceMonth)));
         setCustomTagInput('');
 
-        // Use robust parsing for logicFlow
+        // Use robust parsing for logicFlow (구형 데이터는 role을 큰 범주 기본값으로 채워 저장 시 유실 방지)
         const steps = safeParseLogicFlow(q.logicFlow);
-        setFlowSteps(steps.length > 0 ? steps.map(s => ({ ...s, macroLabel: s.macroLabel ?? '' })) : [emptyFlowStep()]);
+        setFlowSteps(
+            steps.length > 0
+                ? steps.map((s) => ({ ...s, macroLabel: s.macroLabel?.trim() || s.role?.trim() || '' }))
+                : [emptyFlowStep()]
+        );
         setPassageType(isTextbookQuestion(q) ? 'textbook' : 'csat');
         formCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
