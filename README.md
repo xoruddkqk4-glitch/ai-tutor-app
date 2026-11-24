@@ -196,3 +196,23 @@ This project is private and for educational use only.
   - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
 
+## [2026-11-24 11:29] 업데이트 이력 (Commit ID: `a76d9fb`)
+- **수정 내용 (Phase A 반영)**:
+  - **AI 모델 `gpt-6-sol` 전환 및 요청 유형별 추론 수준 분리 (`src/lib/ai-config.ts`, `src/lib/ai.ts`, `supabase/functions/ai-chat/index.ts`, `.env.example`)**:
+    - 기본 모델을 `gpt-6-sol`로 변경하고 환경 변수(`VITE_AI_MODEL`, `OPENAI_MODEL`)로 즉시 롤백·전환할 수 있도록 구성
+    - 자유 질문·주제·논리 흐름·문장 분석은 `reasoning_effort: 'low'`(`max_completion_tokens: 1500`, `temperature` 미전송), 어휘 5개 추출은 `reasoning_effort: 'none'`(`max_completion_tokens: 1000`)으로 분리
+    - Edge Function(`ai-chat`)에서 허용된 `kind`(`tutoring`/`simple`)만 수용하고 클라이언트 임의 모델·온도 지정을 무시하도록 정리
+  - **프롬프트 앞부분 순서 고정 및 대화 이력 누락 수정 (`src/lib/tutor-prompts.ts`, `src/pages/StudentChatInterface.tsx`)**:
+    - `buildPrefixMessages`를 도입해 자유 질문·추천 질문·문장 분석 모두 `[공통 규칙 + 교사 시스템 프롬프트] → [문항 정보]` 순서와 문자열이 동일하게 유지되도록 통합(프롬프트 캐시 적중 대비)
+    - `buildConversationHistory()`의 `!m.context` 필터를 제거해 학생 발화가 AI 대화 이력에서 전부 누락되던 P0-1 결함 수정
+  - **런타임 오류 및 데이터 유실 방지 (`src/lib/auth.ts`, `src/lib/logic-flow.ts`, `src/pages/TeacherAdminDashboard.tsx`, `src/pages/RoomEditWindow.tsx`, `src/lib/text.ts`)**:
+    - `getCurrentUser()`에서 `is_active`를 함께 조회해 비활성 교사 계정의 세션 복원 로그인을 차단(P0-4)
+    - 추천 질문·문장 분석 핸들러 및 버튼에 `isLoading` 가드 추가(P1-3), 논리 흐름 미등록 수능형 문항에서 '0부분' 프롬프트가 생성되지 않도록 차단 및 안내(P1-4)
+    - 수능형 문항 저장 전 `findIncompleteFlowStepIndices`로 불완전한 논리 흐름 행 검증, 수정 시 구형 데이터의 `macroLabel`을 `role`로 보전(P1-2)
+    - `RoomEditWindow` 저장 중 `isSaving` 상태 추가 및 버튼 비활성화로 수업 방 중복 생성 방지(P1-5)
+    - `splitEnglishSentences`에서 `no.`, `U.S.`, `etc.` 문장 경계 및 단일 대문자 이니셜 오인식 수정(P1-8)
+- **검증 결과**:
+  - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+  - 단위 검증 스크립트(`splitEnglishSentences`, `buildPrefixMessages`, `findIncompleteFlowStepIndices`, Edge Function TS 트랜스파일 검사): 전체 통과
+
