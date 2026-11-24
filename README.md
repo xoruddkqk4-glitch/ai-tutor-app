@@ -265,3 +265,12 @@ This project is private and for educational use only.
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
   - `npx vite build`: 통과 (1,770개 모듈 변환 및 프로덕션 번들 생성 확인)
 
+## [2026-11-24 12:41] 업데이트 이력 (Commit ID: `15f70c5`)
+- **수정 내용**:
+  - **학생 문항 선택 모달 정렬 전환 버튼 추가 (`src/pages/StudentChatInterface.tsx`)**:
+    - `문항 선택` 모달 헤더 제목 옆에 `등록순 ↑` / `최신순 ↓` 정렬 전환 버튼 추가(`questionSortOrder` 상태: `'asc' | 'desc'`)
+    - `최신순 ↓` 선택 시 최근에 추가된 문항(`id` 내림차순)이 목록 상단에 표시되도록 구현
+- **검증 결과**:
+  - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+
