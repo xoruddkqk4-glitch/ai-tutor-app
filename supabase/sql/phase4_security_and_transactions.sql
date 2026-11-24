@@ -10,6 +10,15 @@
 -- 3. 프론트엔드 환경 변수(.env / Vercel)에 VITE_USE_AI_PROXY=true 추가 후 재배포
 -- ============================================================================
 
+BEGIN;
+
+-- phase5 실행 전에도 get_active_room_data 내 q.passage_type 참조가 오류 나지 않도록 보장
+ALTER TABLE public.questions
+    ADD COLUMN IF NOT EXISTS passage_type text;
+
+-- 기존 반환 타입(json 등)과 jsonb 차이로 인한 42P13 오류 방지
+DROP FUNCTION IF EXISTS public.get_active_room_data(text);
+
 CREATE OR REPLACE FUNCTION public.get_active_room_data(p_code text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -185,3 +194,9 @@ BEGIN
     END IF;
 END;
 $$;
+
+GRANT EXECUTE ON FUNCTION public.get_active_room_data(text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_room_with_questions(text[], bigint[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_room_with_questions(bigint, text[], bigint[]) TO authenticated;
+
+COMMIT;
