@@ -247,3 +247,21 @@ This project is private and for educational use only.
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
   - Edge Function 2종 TS 트랜스파일 검사, 블록 단위 이력 자르기 검증, RLS SQL 구문 검증: 전체 통과
 
+## [2026-11-24 11:47] 업데이트 이력 (Commit ID: `f369de2`)
+- **수정 내용 (Phase D 반영 — 기존 DOM·스타일·입장 화면 UI 유지)**:
+  - **문항 매퍼·공통 상수 추출 (`src/lib/question-mapper.ts`, `src/lib/questions.ts`, `src/lib/public-api.ts`, `src/lib/constants.ts`)**:
+    - `questions.ts`와 `public-api.ts`에 중복되었던 DB/RPC 문항 변환 로직을 `mapQuestionRecord()`로 통합(P2-4)
+    - 기본 시스템 프롬프트·기본 문항 제한(50)·기본 로그인 안내 문구를 `src/lib/constants.ts`로 추출(P2-5)
+  - **교사 대시보드 컴포넌트 분리 및 폼 핸들러 통합 (`src/components/teacher/*`, `src/pages/TeacherAdminDashboard.tsx`)**:
+    - 기존 DOM·스타일·동작을 그대로 유지한 채 `WelcomeTab`, `RoomsTab`, `StudentsTab`, `SettingsTab`, `PresetOrCustomField`, `TagChipGroup` 컴포넌트로 분리(P2-1, P2-3)
+    - `buildQuestionPayload()`로 문항 추가·수정 검증 및 payload 구성을 단일화하고, `customTagTick` 해킹 상태를 `storedCustomTags` 상태로 교체
+  - **세션 레이스·필터·회원가입·로그·패키지 정리 (`src/pages/TeacherAdminDashboard.tsx`, `src/lib/settings.ts`, `package.json`)**:
+    - `sessionEpochRef`를 도입해 로그아웃·계정 전환 후 늦게 도착한 비동기 응답이 상태를 덮어쓰지 않도록 차단(P3-1)
+    - 삭제 등으로 목록에서 사라진 년도·학년·월 필터 선택값은 별도 안내 문구 없이 `effectiveFilter*` 파생 값으로 자동 초기화(P3-2)
+    - 회원가입 직후(`handleSignup`)에도 문항·학생·방 초기 데이터를 함께 로드하도록 보완(P3-3)
+    - `settings.ts` 및 대시보드 `console.log` 제거 또는 `DEV` 환경 한정(P2-6), 미사용 `package.json` 패키지(`tailwindcss`, `autoprefixer`, `postcss`) 제거(P2-8, 입장 화면 반별 코드 UI 유지)
+- **검증 결과**:
+  - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+  - `npx vite build`: 통과 (1,770개 모듈 변환 및 프로덕션 번들 생성 확인)
+
