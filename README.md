@@ -216,3 +216,16 @@ This project is private and for educational use only.
   - `npm run lint`: 통과 (`0 errors, 0 warnings`)
   - 단위 검증 스크립트(`splitEnglishSentences`, `buildPrefixMessages`, `findIncompleteFlowStepIndices`, Edge Function TS 트랜스파일 검사): 전체 통과
 
+## [2026-11-24 11:39] 업데이트 이력 (Commit ID: `558d963`)
+- **수정 내용 (Phase B 반영 및 계획서 범위 조정)**:
+  - **계획서 범위 조정 (`.plan/implementation_plan_2026-11-24_10-53.md`)**: 기존 6자리 방 코드·학생 학번/이름 UI, 교사 설정 입력 UI, 입장 화면 반별 코드 UI 및 전체 DOM·스타일을 그대로 유지하도록 Phase B(P1-6), Phase C(P0-3), Phase D(P2-1~5, P2-8, P3-2) 범위를 조정
+  - **확장 컬럼 누락 판정 정밀화 (`src/lib/questions.ts`)**: `isMissingQuestionColumnError`에서 일반 `column`/`tags`/`schema cache` 부분 일치를 제거해 NOT NULL(`23502`)·RLS 오류가 컬럼 누락으로 오판되어 세션 전체가 폴백 모드로 고정되던 결함(P1-1) 수정, 저장 전 `ensureExtendedColumnsSupport()` 1회 점검 추가
+  - **전역·개별 문항 제한수 검증 및 제어 입력 전환 (`src/pages/TeacherAdminDashboard.tsx`)**: 기존 입력 UI는 그대로 유지하면서 전역 기본 제한수와 교사별 개별 제한수에 0 이상 정수 검증을 추가하고, 개별 제한 입력을 `teacherLimitDrafts` 기반 제어 입력으로 전환해 기본값 변경 즉시 반영(P1-6)
+  - **설정 조회 오류 분리 (`src/lib/settings.ts`, `src/pages/TeacherAdminDashboard.tsx`)**: `getAppConfig`가 `PGRST116`(행 없음) 외 네트워크/RLS 오류를 `null`로 삼키지 않고 예외를 전달하도록 수정(P1-7)
+  - **문항 번호 필터 및 출처 파싱 정합성 (`src/lib/question-meta.ts`)**: `matchesQuestionNumberFilter`에서 `1번` 검색 시 `2024-1학기-64번`이 걸리던 오매칭 및 숫자 부분 일치(`2`→`2024`)를 제거하고 범위 표기(`29~31번`) 확장 지원, 분리 출처가 있을 때 `EBS 3` 등에서 엉뚱한 출처 번호(`3번`)가 추출되던 문제(P1-9) 수정
+  - **논리 흐름 편집기 IME·키 안정화 (`src/pages/TeacherAdminDashboard.tsx`)**: 한글 IME 조합 중 Enter 키 중복 행 추가(`!e.nativeEvent.isComposing`) 차단 및 행별 고유 `_uid` 키 부여(P2-7)
+- **검증 결과**:
+  - `npx tsc -p tsconfig.app.json --noEmit`: 통과 (타입 에러 0건)
+  - `npm run lint`: 통과 (`0 errors, 0 warnings`)
+  - 단위 검증 스크립트(`matchesQuestionNumberFilter`, `parseQuestionSource`, `isMissingQuestionColumnError`): 전체 통과
+
